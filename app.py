@@ -112,8 +112,25 @@ def format_pln(amount):
     except Exception:
         return ""
 
+def dynamic_category_selector():
+    st.header("Dodaj nową transakcję")
+    category = st.selectbox("Wybierz kategorię", list(CATEGORIES.keys()))
+    subcategory = st.selectbox("Wybierz podkategorię", CATEGORIES[category])
+    description = st.text_input("Opis transakcji")
+    amount = st.text_input("Kwota (PLN)")
+    date = st.date_input("Data transakcji")
+    title = st.text_input("Tytuł (opcjonalnie)")
+
+    if st.button("Dodaj transakcję"):
+        st.success(
+            f"Dodano transakcję: {date} / {category} / {subcategory} / {description} / {amount} / {title}"
+        )
+
 def main():
     st.title("📂 Kategoryzator transakcji bankowych (GitHub Sync)")
+
+    dynamic_category_selector()  # <- Dodano dynamiczny formularz
+
     uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
     if not uploaded:
         return
