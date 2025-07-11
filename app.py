@@ -82,8 +82,12 @@ class Categorizer:
             desc = str(row['Description']).strip()
             cat = row['category']
             sub = row['subcategory']
-            if desc and cat and sub:
-                self.assignments[desc] = (cat, sub)
+            if desc:
+                if cat and sub:
+                    self.assignments[desc] = (cat, sub)
+                elif desc in self.assignments:
+                    # Usuwamy przypisanie, jeśli pola są puste
+                    del self.assignments[desc]
 
 def auto_git_commit():
     token = st.secrets["GITHUB_TOKEN"]
