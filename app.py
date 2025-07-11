@@ -104,8 +104,8 @@ def auto_git_commit():
         repo.remote(name="origin").push()
 
 def format_pln(amount):
-    # Sprawdź puste, zero, NaN i tekst pusty
-    if pd.isna(amount) or str(amount).strip() == "" or str(amount).replace(",", ".").strip() == "0" or str(amount).replace(",", ".").strip() == "0.0":
+    if pd.isna(amount) or str(amount).strip() == "" or \
+       str(amount).replace(",", ".").strip() in ["0", "0.0"]:
         return ""
     try:
         return f"{float(amount):,.2f} PLN".replace(",", " ").replace(".", ",")
@@ -147,12 +147,11 @@ def main():
         'Kwota blokady/zwolnienie blokady': 'Kwota blokady'
     }, inplace=True)
 
-import re
+    # Usuwanie wierszy bez poprawnej daty
+    import re
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+    df = df[df['Date'].astype(str).str.match(date_pattern)]
 
-# Po zamianie nazw kolumn i przed dalszym przetwarzaniem dodaj:
-date_pattern = r"^\d{4}-\d{2}-\d{2}$"  # format np. 2024-07-11
-df = df[df['Date'].astype(str).str.match(date_pattern)]
-    
     required = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']
     if not all(col in df.columns for col in required):
         st.error("Brakuje wymaganych kolumn w pliku.")
@@ -162,11 +161,11 @@ df = df[df['Date'].astype(str).str.match(date_pattern)]
     df = df[required]
     df = cat.categorize(df)
 
-    # Formatowanie waluty
+    # Formatowanie walut
     df['Amount'] = df['Amount'].apply(format_pln)
     df['Kwota blokady'] = df['Kwota blokady'].apply(format_pln)
 
-    # Edytor danych
+    # Edytor danych bez 'Nr rachunku'
     edited = st.data_editor(
         df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']],
         column_config={
