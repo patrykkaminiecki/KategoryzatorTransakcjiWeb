@@ -28,8 +28,15 @@ class Categorizer:
     def __init__(self):
         self.assignments = {}
         if ASSIGNMENTS_FILE.exists():
-            df = pd.read_csv(ASSIGNMENTS_FILE)
-            self.assignments = dict(zip(df['description'], zip(df['category'], df['subcategory'])))
+            try:
+                df = pd.read_csv(ASSIGNMENTS_FILE)
+                if not df.empty and {'description', 'category', 'subcategory'}.issubset(df.columns):
+                    self.assignments = dict(zip(df['description'], zip(df['category'], df['subcategory'])))
+                else:
+                    st.warning("Plik assignments.csv istnieje, ale jest pusty lub nieprawidłowy.")
+            except pd.errors.EmptyDataError:
+                st.warning("Plik assignments.csv jest pusty.")
+
 
     def save(self):
         df = pd.DataFrame([
