@@ -104,10 +104,13 @@ def auto_git_commit():
         repo.remote(name="origin").push()
 
 def format_pln(amount):
+    # Sprawdź puste, zero, NaN i tekst pusty
+    if pd.isna(amount) or str(amount).strip() == "" or str(amount).replace(",", ".").strip() == "0" or str(amount).replace(",", ".").strip() == "0.0":
+        return ""
     try:
         return f"{float(amount):,.2f} PLN".replace(",", " ").replace(".", ",")
     except Exception:
-        return amount
+        return ""
 
 def main():
     st.title("📂 Kategoryzator transakcji bankowych (GitHub Sync)")
