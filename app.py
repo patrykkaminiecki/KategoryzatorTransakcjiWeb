@@ -9,19 +9,19 @@ import git  # GitPython
 st.set_page_config(layout="wide")
 
 CATEGORIES = {
-    'Przychód': ['Apteka'],
-    'Rachunki': ['Buty'],
-    'Subskrypcje': ['Disney'],
-    'Kredyty': ['Dom'],
-    'Jedzenie': ['Gaz'],
-    'Wydatki': ['Gmina Kolbudy'],
-    'Wakacje': ['Inne'],
-    'Oszczędności': [
-        'Internet','Jedzenie','Jolka','Nadpłata Kredytu','Netflix',
-        'Odpady','Ogród','Oszczędności','Paliwo','Parking','Patryk',
-        'Pies','Prąd','Przedszkole','Rozrywka','Samochód',
-        'Telefon','TV + Dyson','Ubrania','Wakacje','Woda','Żłobek'
-    ]
+    'Przychody': ['Jolka', 'Patryk', 'Inne'],
+    'Rachunki': ['Gaz', 'Prąd', 'Odpady', 'Woda', 'Telefon', 'Internet', 'Netflix', 'Disney'],
+    'Kredyty': ['Gmina Kolbudy', 'Hipoteka', 'TV+Dyson'],
+    'Jedzenie': ['Zakupy', 'Poza Domem'],
+    'Transport': ['Paliwo', 'Parking', 'Samochód'],
+    'Dzieci': ['Żłobek', 'Przedszkole'],
+    'Zdrowie i Uroda': ['Apteka', 'Lekarz', 'Kosmetyki'],
+    'Rozrywka': ['Różne'],
+    'Odzież i Obuwie': ['Ubrania', 'Buty'],
+    'Wakacje': ['Różne'],
+    'Ogród': ['Różne'],
+    'Inne Wydatki': ['Pies', 'Prezenty'],
+    'Dom': ['Ogród', 'Różne']
 }
 
 ASSIGNMENTS_FILE = Path("assignments.csv")
@@ -165,7 +165,7 @@ def main():
     df['Amount'] = df['Amount'].apply(format_pln)
     df['Kwota blokady'] = df['Kwota blokady'].apply(format_pln)
 
-    # Edytor danych bez 'Nr rachunku'
+    # Edytor danych bez 'Nr rachunku', podkategorie są sumą wszystkich z CATEGORIES
     edited = st.data_editor(
         df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']],
         column_config={
