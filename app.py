@@ -159,7 +159,7 @@ def main():
 
     # Edytor danych
     edited = st.data_editor(
-        df[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady','category','subcategory']],
+        df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']],
         column_config={
             'category': st.column_config.SelectboxColumn('Kategoria', options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn(
