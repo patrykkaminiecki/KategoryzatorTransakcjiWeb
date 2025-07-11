@@ -80,13 +80,13 @@ class Categorizer:
     def update_from_dataframe(self, df):
         for _, row in df.iterrows():
             desc = str(row['Description']).strip()
-            cat = row['category']
-            sub = row['subcategory']
+            cat = str(row['category']).strip() if row['category'] is not None else ""
+            sub = str(row['subcategory']).strip() if row['subcategory'] is not None else ""
             if desc:
                 if cat and sub:
                     self.assignments[desc] = (cat, sub)
                 elif desc in self.assignments:
-                    # Usuwamy przypisanie, jeśli pola są puste
+                    # Usuwamy przypisanie, jeśli cokolwiek jest puste
                     del self.assignments[desc]
 
 def auto_git_commit():
