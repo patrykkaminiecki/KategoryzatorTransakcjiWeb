@@ -83,7 +83,16 @@ def main():
     # Upload pliku
     uploaded = st.file_uploader("Wybierz plik CSV", type=["csv"])
     if uploaded:
-        df = pd.read_csv(uploaded)
+        try:
+    # jeśli CSV od banku ma średniki i kodowanie Windows‑1250:
+    df = pd.read_csv(uploaded, sep=';', encoding='cp1250')
+except Exception:
+    # w ostateczności spróbuj z domyślnym UTF-8 i przecinkiem
+    try:
+        df = pd.read_csv(uploaded, sep=',', encoding='utf-8')
+    except Exception as e:
+        st.error(f"Błąd podczas wczytywania pliku: {e}")
+        return
         required = ['Date', 'Description', 'Amount']  # dopasuj do swojego CSV
         if not all(col in df.columns for col in required):
             st.error(f"Plik musi zawierać kolumny: {required}")
