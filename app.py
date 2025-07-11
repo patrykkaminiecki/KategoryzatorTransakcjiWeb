@@ -9,20 +9,29 @@ import git  # GitPython
 st.set_page_config(layout="wide")
 
 CATEGORIES = {
-    'Przychody': ['Jolka', 'Patryk', 'Inne'],
-    'Rachunki': ['Gaz', 'Prąd', 'Odpady', 'Woda', 'Telefon', 'Internet', 'Netflix', 'Disney'],
-    'Kredyty': ['Gmina Kolbudy', 'Hipoteka', 'TV+Dyson'],
-    'Jedzenie': ['Zakupy', 'Poza Domem'],
-    'Transport': ['Paliwo', 'Parking', 'Samochód'],
-    'Dzieci': ['Żłobek', 'Przedszkole'],
-    'Zdrowie i Uroda': ['Apteka', 'Lekarz', 'Kosmetyki'],
-    'Rozrywka': ['Różne'],
-    'Odzież i Obuwie': ['Ubrania', 'Buty'],
-    'Wakacje': ['Różne'],
-    'Ogród': ['Różne'],
+    'Dzieci': ['Przedszkole', 'Żłobek'],
+    'Dom': ['Ogród', 'Różne'],
     'Inne Wydatki': ['Pies', 'Prezenty'],
-    'Dom': ['Ogród', 'Różne']
+    'Jedzenie': ['Poza Domem', 'Zakupy'],
+    'Kredyty': ['Gmina Kolbudy', 'Hipoteka', 'TV+Dyson'],
+    'Nadpłata Kredytu': ['Hipoteka', 'Samochód'],
+    'Ogród': ['Różne'],
+    'Oszczędności': ['Poduszka Finansowa', 'Remont/Auto'],
+    'Odzież i Obuwie': ['Buty', 'Ubrania'],
+    'Przychody': ['Inne', 'Jolka', 'Patryk'],
+    'Rachunki': ['Disney', 'Gaz', 'Internet', 'Netflix', 'Odpady', 'Prąd', 'Telefon', 'Woda'],
+    'Rozrywka': ['Różne'],
+    'Transport': ['Parking', 'Paliwo', 'Samochód'],
+    'Wakacje': ['Różne'],
+    'Zdrowie i Uroda': ['Apteka', 'Kosmetyki', 'Lekarz'],
 }
+
+# Sortujemy kategorie i podkategorie A-Z
+CATEGORIES_SORTED = dict()
+for cat in sorted(CATEGORIES.keys()):
+    # Usuwamy duplikaty podkategorii i sortujemy je
+    subs = sorted(list(set(CATEGORIES[cat])))
+    CATEGORIES_SORTED[cat] = subs
 
 ASSIGNMENTS_FILE = Path("assignments.csv")
 
@@ -112,25 +121,8 @@ def format_pln(amount):
     except Exception:
         return ""
 
-def dynamic_category_selector():
-    st.header("Dodaj nową transakcję")
-    category = st.selectbox("Wybierz kategorię", list(CATEGORIES.keys()))
-    subcategory = st.selectbox("Wybierz podkategorię", CATEGORIES[category])
-    description = st.text_input("Opis transakcji")
-    amount = st.text_input("Kwota (PLN)")
-    date = st.date_input("Data transakcji")
-    title = st.text_input("Tytuł (opcjonalnie)")
-
-    if st.button("Dodaj transakcję"):
-        st.success(
-            f"Dodano transakcję: {date} / {category} / {subcategory} / {description} / {amount} / {title}"
-        )
-
 def main():
     st.title("📂 Kategoryzator transakcji bankowych (GitHub Sync)")
-
-    dynamic_category_selector()  # <- Dodano dynamiczny formularz
-
     uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
     if not uploaded:
         return
@@ -182,15 +174,14 @@ def main():
     df['Amount'] = df['Amount'].apply(format_pln)
     df['Kwota blokady'] = df['Kwota blokady'].apply(format_pln)
 
-    # Edytor danych bez 'Nr rachunku', podkategorie są sumą wszystkich z CATEGORIES
+    # Edytor danych bez 'Nr rachunku', posortowane i unikalne kategorie/podkategorie
+    all_categories = list(CATEGORIES_SORTED.keys())
+    all_subcategories = sorted(list({sub for subs in CATEGORIES_SORTED.values() for sub in subs}))
     edited = st.data_editor(
         df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']],
         column_config={
-            'category': st.column_config.SelectboxColumn('Kategoria', options=list(CATEGORIES.keys())),
-            'subcategory': st.column_config.SelectboxColumn(
-                'Podkategoria',
-                options=[sub for subs in CATEGORIES.values() for sub in subs]
-            ),
+            'category': st.column_config.SelectboxColumn('Kategoria', options=all_categories),
+            'subcategory': st.column_config.SelectboxColumn('Podkategoria', options=all_subcategories),
         },
         hide_index=True,
         use_container_width=True
