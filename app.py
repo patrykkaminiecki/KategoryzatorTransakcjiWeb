@@ -41,8 +41,12 @@ class Categorizer:
         if ASSIGNMENTS_FILE.exists():
             try:
                 df = pd.read_csv(ASSIGNMENTS_FILE)
-                if not df.empty and {'description', 'category', 'subcategory'}.issubset(df.columns):
-                    self.assignments = dict(zip(df['description'], zip(df['category'], df['subcategory'])))
+                # nowy klucz: Date|Description|Amount
+                if not df.empty and {'date', 'description', 'amount', 'category', 'subcategory'}.issubset(df.columns):
+                    self.assignments = {
+                        f"{row['date']}|{row['description']}|{row['amount']}": (row['category'], row['subcategory'])
+                        for _, row in df.iterrows()
+                    }
                 else:
                     st.warning("Plik assignments.csv istnieje, ale jest pusty lub nieprawidłowy.")
             except pd.errors.EmptyDataError:
@@ -53,39 +57,40 @@ class Categorizer:
             st.warning("Brak przypisań do zapisania.")
             return
         df = pd.DataFrame([
-            {"description": desc, "category": cat, "subcategory": sub}
-            for desc, (cat, sub) in self.assignments.items()
+            {
+                "date": key.split("|")[0],
+                "description": key.split("|")[1],
+                "amount": key.split("|")[2],
+                "category": cat,
+                "subcategory": sub
+            }
+            for key, (cat, sub) in self.assignments.items()
         ])
         df.to_csv(ASSIGNMENTS_FILE, index=False)
 
-    def suggest(self, description):
+    def suggest(self, key):
         if not self.assignments:
             return None
-        best, score, _ = process.extractOne(description, list(self.assignments.keys()), scorer=fuzz.token_sort_ratio)
-        return self.assignments[best] if score > 80 else None
+        return self.assignments.get(key, None)
 
     def categorize(self, df):
         df['category'] = None
         df['subcategory'] = None
         for i, row in df.iterrows():
-            desc = str(row.get('Description', '')).strip()
-            if desc in self.assignments:
-                df.at[i, 'category'], df.at[i, 'subcategory'] = self.assignments[desc]
-            else:
-                suggestion = self.suggest(desc)
-                if suggestion:
-                    df.at[i, 'category'], df.at[i, 'subcategory'] = suggestion
+            key = f"{row['Date']}|{row['Description']}|{row['Amount']}"
+            if key in self.assignments:
+                df.at[i, 'category'], df.at[i, 'subcategory'] = self.assignments[key]
         return df
 
     def update_from_dataframe(self, df):
-        # Zawsze generuj assignments od nowa na podstawie dataframe
+        # assignments budowane od zera na podstawie obecnego dataframe!
         new_assignments = {}
         for _, row in df.iterrows():
-            desc = str(row['Description']).strip()
+            key = f"{row['Date']}|{row['Description']}|{row['Amount']}"
             cat = str(row['category']).strip() if row['category'] is not None else ""
             sub = str(row['subcategory']).strip() if row['subcategory'] is not None else ""
-            if desc and cat and sub:
-                new_assignments[desc] = (cat, sub)
+            if cat and sub:
+                new_assignments[key] = (cat, sub)
         self.assignments = new_assignments
 
 def auto_git_commit():
