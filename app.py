@@ -32,13 +32,14 @@ CREATE TABLE IF NOT EXISTS assignments (
 
 class Categorizer:
     def __init__(self, db_path: Path):
-        # Połączenie z bazą (plik w repozytorium lub pamięć)
         self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self.conn.execute(DB_SCHEMA)
         self.conn.commit()
 
     def load_assignments(self):
-        df = pd.read_sql_query("SELECT description, category, subcategory FROM assignments", self.conn)
+        df = pd.read_sql_query(
+            "SELECT description, category, subcategory FROM assignments", self.conn
+        )
         return dict(zip(df['description'], zip(df['category'], df['subcategory'])))
 
     def save_assignments(self, mappings: pd.DataFrame):
@@ -54,7 +55,9 @@ class Categorizer:
         assigned = self.load_assignments()
         if not assigned:
             return None
-        best, score, _ = process.extractOne(description, list(assigned.keys()), scorer=fuzz.token_sort_ratio)
+        best, score, _ = process.extractOne(
+            description, list(assigned.keys()), scorer=fuzz.token_sort_ratio
+        )
         return assigned[best] if score > 80 else None
 
     def categorize(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -73,9 +76,9 @@ class Categorizer:
 
 def main():
     st.title("Kategoryzator transakcji bankowych")
-    st.markdown("Wczytaj plik CSV z transakcjami, nadaj kategorie i pobierz wynik.")
+    st.markdown("Wczytaj plik CSV z transakcjami z banku, nadaj kategorie i pobierz wynik.")
 
-    # Ścieżka do pliku bazy SQLite (może być w pamięci lub na dysku)
+    # Ścieżka do pliku bazy SQLite
     db_path_str = st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db")
     db_path = Path(db_path_str)
     cat = Categorizer(db_path)
@@ -84,17 +87,41 @@ def main():
     if not uploaded:
         return
 
-    # Próba wczytania w formacie polskim (średnik + cp1250), potem UTF-8
+    # Próba wczytania: najpierw polski CSV (średnik + cp1250), z pominięciem 10 wierszy
     try:
-        df = pd.read_csv(uploaded, sep=';', encoding='cp1250')
+        df = pd.read_csv(
+            uploaded,
+            sep=';',
+            encoding='cp1250',
+            skiprows=10,
+            decimal=','
+        )
     except Exception:
+        # Jeśli nie zadziała, spróbuj UTF-8 i przecinka
         try:
-            df = pd.read_csv(uploaded, sep=',', encoding='utf-8')
+            df = pd.read_csv(
+                uploaded,
+                sep=',',
+                encoding='utf-8',
+                skiprows=10,
+                decimal=','
+            )
         except Exception as e:
             st.error(f"Błąd podczas wczytywania pliku: {e}")
             return
 
-    # Walidacja kolumn
+    # Czyść nagłówki i usuń puste kolumny
+    df = df.loc[:, df.columns.notna()]
+    df.columns = [col.strip() for col in df.columns]
+
+    # Zmień nazwy kolumn na te, których oczekuje logika
+    df.rename(columns={
+        'Data transakcji': 'Date',
+        'Dane kontrahenta': 'Description',
+        'Kwota': 'Amount'
+    }, inplace=True)
+
+    # Walidacja obecności wymaganych kolumn
     required = ['Date', 'Description', 'Amount']
     if not all(col in df.columns for col in required):
         st.error(f"Plik musi zawierać kolumny: {required}")
@@ -103,7 +130,7 @@ def main():
     # Automatyczne kategoryzowanie
     df = cat.categorize(df)
 
-    # Edycja przez użytkownika (dropdowny)
+    # Interaktywny edytor z dropdownami dla kategorii/podkategorii
     edited = st.experimental_data_editor(
         df,
         column_config={
@@ -118,12 +145,16 @@ def main():
         use_container_width=True
     )
 
-    # Zapis i pobranie
+    # Zapisanie wyborów i pobranie wynikowego CSV
     if st.button("Zapisz i pobierz CSV"):
         cat.save_assignments(edited[['Description', 'category', 'subcategory']])
         csv = edited.to_csv(index=False).encode('utf-8')
-        st.download_button("Pobierz wynikowy CSV", csv,
-                          file_name="wynik.csv", mime='text/csv')
+        st.download_button(
+            "Pobierz wynikowy CSV",
+            csv,
+            file_name="wynik.csv",
+            mime='text/csv'
+        )
 
 if __name__ == '__main__':
     main()
