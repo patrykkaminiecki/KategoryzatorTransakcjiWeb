@@ -5,7 +5,7 @@ from pathlib import Path
 import streamlit as st
 import io
 
-# Definicja kategorii i podkategorii do wyboru
+# Definicja kategorii i podkategorii
 CATEGORIES = {
     'Przychód': ['Apteka'],
     'Rachunki': ['Buty'],
@@ -15,14 +15,13 @@ CATEGORIES = {
     'Wydatki': ['Gmina Kolbudy'],
     'Wakacje': ['Inne'],
     'Oszczędności': [
-        'Internet', 'Jedzenie', 'Jolka', 'Nadpłata Kredytu', 'Netflix',
-        'Odpady', 'Ogród', 'Oszczędności', 'Paliwo', 'Parking', 'Patryk',
-        'Pies', 'Prąd', 'Przedszkole', 'Rozrywka', 'Samochód',
-        'Telefon', 'TV + Dyson', 'Ubrania', 'Wakacje', 'Woda', 'Żłobek'
+        'Internet','Jedzenie','Jolka','Nadpłata Kredytu','Netflix',
+        'Odpady','Ogród','Oszczędności','Paliwo','Parking','Patryk',
+        'Pies','Prąd','Przedszkole','Rozrywka','Samochód',
+        'Telefon','TV + Dyson','Ubrania','Wakacje','Woda','Żłobek'
     ]
 }
 
-# Schemat bazy SQLite
 DB_SCHEMA = '''
 CREATE TABLE IF NOT EXISTS assignments (
     description TEXT PRIMARY KEY,
@@ -38,9 +37,7 @@ class Categorizer:
         self.conn.commit()
 
     def load_assignments(self):
-        df = pd.read_sql_query(
-            "SELECT description, category, subcategory FROM assignments", self.conn
-        )
+        df = pd.read_sql_query("SELECT description, category, subcategory FROM assignments", self.conn)
         return dict(zip(df['description'], zip(df['category'], df['subcategory'])))
 
     def save_assignments(self, mappings: pd.DataFrame):
@@ -56,9 +53,7 @@ class Categorizer:
         assigned = self.load_assignments()
         if not assigned:
             return None
-        best, score, _ = process.extractOne(
-            description, list(assigned.keys()), scorer=fuzz.token_sort_ratio
-        )
+        best, score, _ = process.extractOne(description, list(assigned.keys()), scorer=fuzz.token_sort_ratio)
         return assigned[best] if score > 80 else None
 
     def categorize(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -77,9 +72,8 @@ class Categorizer:
 
 def main():
     st.title("Kategoryzator transakcji bankowych")
-    st.markdown("Wczytaj plik CSV z transakcjami z banku, nadaj kategorie i pobierz wynik.")
+    st.markdown("Wczytaj plik CSV z banku, nadaj kategorie i pobierz wynik.")
 
-    # Ścieżka do pliku bazy SQLite
     db_path = Path(st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db"))
     cat = Categorizer(db_path)
 
@@ -87,36 +81,32 @@ def main():
     if not uploaded:
         return
 
-    # Wczytanie surowych bajtów pliku
     raw = uploaded.getvalue()
-
-    # Spróbuj dwóch kodowań: polskie cp1250, potem utf-8
     df = None
-    for enc, sep in [('cp1250', ';'), ('utf-8', ';'), ('utf-8', ',')]:
+    for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             text = raw.decode(enc, errors='ignore')
             lines = text.splitlines()
-            # znajdź wiersz nagłówka
-            header_idx = next(i for i, line in enumerate(lines)
-                              if 'Data transakcji' in line and 'Kwota' in line)
-            # weź od nagłówka w dół
-            data_text = '\n'.join(lines[header_idx:])
-            df = pd.read_csv(io.StringIO(data_text), sep=sep, decimal=',')
+            header_i = next(i for i,line in enumerate(lines)
+                            if 'Data transakcji' in line or 'Kwota' in line)
+            data = '\n'.join(lines[header_i:])
+            df = pd.read_csv(io.StringIO(data), sep=sep, decimal=',')
             break
-        except StopIteration:
-            continue
         except Exception:
-            continue
+            pass
 
     if df is None:
-        st.error("Nie udało się znaleźć lub wczytać tabeli transakcji. Sprawdź format pliku.")
+        st.error("Nie udało się wczytać transakcji. Sprawdź plik.")
         return
 
-    # Oczyść nagłówki
-    df = df.loc[:, df.columns.notna()]
-    df.columns = [col.strip() for col in df.columns]
+    # **DEBUG:** pokaż odczytane nagłówki
+    st.write("🔍 Odczytane kolumny:", df.columns.tolist())
 
-    # Zmień nazwy kolumn
+    # Usuń puste i przytnij
+    df = df.loc[:, df.columns.notna()]
+    df.columns = [c.strip() for c in df.columns]
+
+    # Tu dostosuj, jeśli nagłówki są inne niż poniższe:
     df.rename(columns={
         'Data transakcji': 'Date',
         'Dane kontrahenta': 'Description',
@@ -124,21 +114,17 @@ def main():
     }, inplace=True)
 
     # Walidacja
-    required = ['Date', 'Description', 'Amount']
-    if not all(col in df.columns for col in required):
-        st.error(f"Plik musi zawierać kolumny: {required}")
+    req = ['Date','Description','Amount']
+    if not all(c in df.columns for c in req):
+        st.error(f"Plik musi zawierać kolumny: {req}")
         return
 
-    # Automatyczna kategoryzacja
     df = cat.categorize(df)
 
-    # Edycja w edytorze
     edited = st.experimental_data_editor(
         df,
         column_config={
-            'category': st.column_config.SelectboxColumn(
-                'Kategoria', options=list(CATEGORIES.keys())
-            ),
+            'category': st.column_config.SelectboxColumn('Kategoria', options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn(
                 'Podkategoria',
                 options=[sub for subs in CATEGORIES.values() for sub in subs]
@@ -147,14 +133,10 @@ def main():
         use_container_width=True
     )
 
-    # Zapis i pobranie
     if st.button("Zapisz i pobierz CSV"):
-        cat.save_assignments(edited[['Description', 'category', 'subcategory']])
-        csv = edited.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "Pobierz wynikowy CSV", csv,
-            file_name="wynik.csv", mime='text/csv'
-        )
+        cat.save_assignments(edited[['Description','category','subcategory']])
+        out = edited.to_csv(index=False).encode('utf-8')
+        st.download_button("Pobierz wynik", out, file_name="wynik.csv", mime='text/csv')
 
-if __name__ == '__main__':
+if __name__=='__main__':
     main()
