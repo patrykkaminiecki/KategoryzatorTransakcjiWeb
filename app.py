@@ -147,6 +147,12 @@ def main():
         'Kwota blokady/zwolnienie blokady': 'Kwota blokady'
     }, inplace=True)
 
+import re
+
+# Po zamianie nazw kolumn i przed dalszym przetwarzaniem dodaj:
+date_pattern = r"^\d{4}-\d{2}-\d{2}$"  # format np. 2024-07-11
+df = df[df['Date'].astype(str).str.match(date_pattern)]
+    
     required = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']
     if not all(col in df.columns for col in required):
         st.error("Brakuje wymaganych kolumn w pliku.")
