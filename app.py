@@ -6,6 +6,8 @@ import io
 import os
 import git  # GitPython
 
+st.set_page_config(layout="wide")
+
 CATEGORIES = {
     'Przychód': ['Apteka'],
     'Rachunki': ['Buty'],
@@ -37,7 +39,6 @@ class Categorizer:
             except pd.errors.EmptyDataError:
                 st.warning("Plik assignments.csv jest pusty.")
 
-
     def save(self):
         if not self.assignments:
             st.warning("Brak przypisań do zapisania.")
@@ -47,7 +48,6 @@ class Categorizer:
             for desc, (cat, sub) in self.assignments.items()
         ])
         df.to_csv(ASSIGNMENTS_FILE, index=False)
-
 
     def suggest(self, description):
         if not self.assignments:
@@ -103,7 +103,12 @@ def auto_git_commit():
         )
         repo.remote(name="origin").push()
 
-st.set_page_config(layout="wide")
+def format_pln(amount):
+    try:
+        return f"{float(amount):,.2f} PLN".replace(",", " ").replace(".", ",")
+    except Exception:
+        return amount
+
 def main():
     st.title("📂 Kategoryzator transakcji bankowych (GitHub Sync)")
     uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
@@ -147,14 +152,11 @@ def main():
     cat = Categorizer()
     df = df[required]
     df = cat.categorize(df)
-    def format_pln(amount):
-        try:
-            return f"{amount:,.2f} PLN".replace(",", " ").replace(".", ",")
-        except Exception:
-            return amount
 
-df['Amount'] = df['Amount'].apply(format_pln)
-df['Kwota blokady'] = df['Kwota blokady'].apply(format_pln)
+    # Formatowanie waluty
+    df['Amount'] = df['Amount'].apply(format_pln)
+    df['Kwota blokady'] = df['Kwota blokady'].apply(format_pln)
+
     # Edytor danych
     edited = st.data_editor(
         df[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady','category','subcategory']],
