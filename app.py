@@ -39,11 +39,15 @@ class Categorizer:
 
 
     def save(self):
-        df = pd.DataFrame([
-            {"description": desc, "category": cat, "subcategory": sub}
-            for desc, (cat, sub) in self.assignments.items()
-        ])
-        df.to_csv(ASSIGNMENTS_FILE, index=False)
+    if not self.assignments:
+        st.warning("Brak przypisań do zapisania.")
+        return
+    df = pd.DataFrame([
+        {"description": desc, "category": cat, "subcategory": sub}
+        for desc, (cat, sub) in self.assignments.items()
+    ])
+    df.to_csv(ASSIGNMENTS_FILE, index=False)
+
 
     def suggest(self, description):
         if not self.assignments:
