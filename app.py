@@ -72,15 +72,26 @@ def auto_git_commit():
     repo_url = f"https://{token}@github.com/{repo_name}.git"
 
     if not Path(".git").exists():
-        git.Repo.clone_from(repo_url, ".", branch="main")
+        repo = git.Repo.clone_from(repo_url, ".", branch="main")
+    else:
+        repo = git.Repo(".")
 
-    repo = git.Repo(".")
+    # Ustawienie zdalnego repozytorium z uwierzytelnieniem
+    if "origin" not in [remote.name for remote in repo.remotes]:
+        repo.create_remote("origin", repo_url)
+    else:
+        repo.remote("origin").set_url(repo_url)
+
     repo.git.add("assignments.csv")
 
     if repo.is_dirty():
-        repo.index.commit("Automatyczny zapis assignments.csv z aplikacji Streamlit", author=git.Actor(*author.split(" <")))
-        origin = repo.remote(name='origin')
-        origin.push()
+        author_name, author_email = author.replace(">", "").split(" <")
+        repo.index.commit(
+            "Automatyczny zapis assignments.csv z aplikacji Streamlit",
+            author=git.Actor(author_name, author_email)
+        )
+        repo.remote(name="origin").push()
+
 
 def main():
     st.title("📂 Kategoryzator transakcji bankowych (GitHub Sync)")
