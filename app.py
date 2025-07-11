@@ -103,7 +103,7 @@ def auto_git_commit():
         )
         repo.remote(name="origin").push()
 
-
+st.set_page_config(layout="wide")
 def main():
     st.title("📂 Kategoryzator transakcji bankowych (GitHub Sync)")
     uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
@@ -147,7 +147,14 @@ def main():
     cat = Categorizer()
     df = df[required]
     df = cat.categorize(df)
+    def format_pln(amount):
+        try:
+            return f"{amount:,.2f} PLN".replace(",", " ").replace(".", ",")
+        except Exception:
+            return amount
 
+df['Amount'] = df['Amount'].apply(format_pln)
+df['Kwota blokady'] = df['Kwota blokady'].apply(format_pln)
     # Edytor danych
     edited = st.data_editor(
         df[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady','category','subcategory']],
