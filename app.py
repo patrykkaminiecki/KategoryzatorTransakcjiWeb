@@ -5,7 +5,7 @@ from pathlib import Path
 import streamlit as st
 import io
 
-# Definicja kategorii i podkategorii
+# 1) DEFINICJA KATEGORII I PODKATEGORII
 CATEGORIES = {
     'Przychód': ['Apteka'],
     'Rachunki': ['Buty'],
@@ -76,9 +76,9 @@ class Categorizer:
 
 def main():
     st.title("Kategoryzator transakcji bankowych")
-    st.markdown("Wczytaj plik CSV z banku, nadaj kategorie i pobierz wynik.")
+    st.markdown("Wczytaj plik CSV z banku, przypisz kategorie i pobierz gotowe dane.")
 
-    # Ścieżka do pliku bazy SQLite
+    # Ścieżka do SQLite (domyślnie w katalogu aplikacji)
     db_path = Path(st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db"))
     cat = Categorizer(db_path)
 
@@ -86,14 +86,14 @@ def main():
     if not uploaded:
         return
 
-    # Wczytanie surowych bajtów pliku
     raw = uploaded.getvalue()
     df = None
+    # próbujemy trzech wariantów kodowania/separacji
     for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             text = raw.decode(enc, errors='ignore')
             lines = text.splitlines()
-            header_i = next(i for i,line in enumerate(lines)
+            header_i = next(i for i, line in enumerate(lines)
                             if 'Data transakcji' in line and 'Kwota' in line)
             data = '\n'.join(lines[header_i:])
             df = pd.read_csv(io.StringIO(data), sep=sep, decimal=',')
@@ -102,57 +102,62 @@ def main():
             continue
 
     if df is None:
-        st.error("Nie udało się wczytać transakcji. Sprawdź plik.")
+        st.error("Nie udało się wczytać tabeli transakcji. Sprawdź plik.")
         return
 
-    # (opcjonalnie) debug:
-    # st.write("🔍 Odczytane kolumny:", df.columns.tolist())
-
-    # Usuń puste i przytnij nagłówki
+    # Ściągnięcie nagłówków i przycięcie
     df = df.loc[:, df.columns.notna()]
     df.columns = [c.strip() for c in df.columns]
 
-    # Dostosuj nazwy kolumn:
+    # 2) MAPOWANIE KOLUMN NA UNIWERSALNE
     df.rename(columns={
         'Data transakcji': 'Date',
         'Dane kontrahenta': 'Description',
-        'Kwota transakcji (waluta rachunku)': 'Amount'
+        'Tytuł': 'Tytuł',
+        'Nr rachunku': 'Nr rachunku',
+        'Kwota transakcji (waluta rachunku)': 'Amount',
+        'Kwota blokady/zwolnienie blokady': 'Kwota blokady'
     }, inplace=True)
 
-    # Walidacja
-    required = ['Date', 'Description', 'Amount']
+    # 3) WALIDACJA
+    required = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']
     if not all(c in df.columns for c in required):
-        st.error(f"Plik musi zawierać kolumny: {required}")
+        st.error(f"Brakuje oczekiwanych kolumn: {required}")
         return
 
-    # Automatyczna kategoryzacja
+    # 4) AUTOMATYCZNA KATEGORYZACJA
     df = cat.categorize(df)
 
-    # Interaktywny edytor z dropdownami (użyj nowego API st.data_editor)
+    # 5) WYBÓR I FORMATOWANIE KOLUMN DO PREZENTACJI
+    subset = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady','category','subcategory']
+    df = df[subset]
+
+    # 6) INTERAKTYWNY EDYTOR (TYLKO dla kategorii i podkategorii)
     edited = st.data_editor(
         df,
         column_config={
-            'category': st.column_config.SelectboxColumn(
-                'Kategoria', options=list(CATEGORIES.keys())
-            ),
+            'Date': st.column_config.Column('Data'),
+            'Description': st.column_config.Column('Dane kontrahenta'),
+            'Tytuł': st.column_config.Column('Tytuł'),
+            'Nr rachunku': st.column_config.Column('Nr rachunku'),
+            'Amount': st.column_config.NumberColumn('Kwota', format='%.2f'),
+            'Kwota blokady': st.column_config.NumberColumn('Kwota blokady', format='%.2f'),
+            'category': st.column_config.SelectboxColumn('Kategoria', options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn(
                 'Podkategoria',
                 options=[sub for subs in CATEGORIES.values() for sub in subs]
             ),
         },
+        hide_index=True,
         use_container_width=True
     )
 
-    # Zapis i pobranie
+    # 7) ZAPIS I POBRANIE WYNIKU
     if st.button("Zapisz i pobierz CSV"):
+        # Zapisujemy tylko mapping (Description → category/subcategory)
         cat.save_assignments(edited[['Description','category','subcategory']])
-        csv = edited.to_csv(index=False).encode('utf-8')
-        st.download_button(
-            "Pobierz wynikowy CSV",
-            csv,
-            file_name="wynik.csv",
-            mime='text/csv'
-        )
+        out = edited.to_csv(index=False).encode('utf-8')
+        st.download_button("Pobierz wynikowy CSV", out, file_name="wynik.csv", mime='text/csv')
 
 if __name__ == '__main__':
     main()
