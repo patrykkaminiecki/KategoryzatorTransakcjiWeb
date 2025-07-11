@@ -105,8 +105,8 @@ def main():
         st.error("Nie udało się wczytać transakcji. Sprawdź plik.")
         return
 
-    # Pokaż dla debugowania odczytane kolumny
-    st.write("🔍 Odczytane kolumny:", df.columns.tolist())
+    # (opcjonalnie) debug:
+    # st.write("🔍 Odczytane kolumny:", df.columns.tolist())
 
     # Usuń puste i przytnij nagłówki
     df = df.loc[:, df.columns.notna()]
@@ -128,8 +128,8 @@ def main():
     # Automatyczna kategoryzacja
     df = cat.categorize(df)
 
-    # Interaktywny edytor z dropdownami
-    edited = st.experimental_data_editor(
+    # Interaktywny edytor z dropdownami (użyj nowego API st.data_editor)
+    edited = st.data_editor(
         df,
         column_config={
             'category': st.column_config.SelectboxColumn(
