@@ -71,53 +71,59 @@ class Categorizer:
                     df.at[idx, 'category'], df.at[idx, 'subcategory'] = sug
         return df
 
-# Interfejs użytkownika za pomocą Streamlit
 def main():
     st.title("Kategoryzator transakcji bankowych")
     st.markdown("Wczytaj plik CSV z transakcjami, nadaj kategorie i pobierz wynik.")
 
-    # Ścieżka do bazy w pamięci lub pliku
-    db_path = st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db")
-    cat = Categorizer(Path(db_path))
+    # Ścieżka do pliku bazy SQLite (może być w pamięci lub na dysku)
+    db_path_str = st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db")
+    db_path = Path(db_path_str)
+    cat = Categorizer(db_path)
 
-    # Upload pliku
     uploaded = st.file_uploader("Wybierz plik CSV", type=["csv"])
-    if uploaded:
-        try:
-    # jeśli CSV od banku ma średniki i kodowanie Windows‑1250:
-    df = pd.read_csv(uploaded, sep=';', encoding='cp1250')
-except Exception:
-    # w ostateczności spróbuj z domyślnym UTF-8 i przecinkiem
-    try:
-        df = pd.read_csv(uploaded, sep=',', encoding='utf-8')
-    except Exception as e:
-        st.error(f"Błąd podczas wczytywania pliku: {e}")
+    if not uploaded:
         return
-        required = ['Date', 'Description', 'Amount']  # dopasuj do swojego CSV
-        if not all(col in df.columns for col in required):
-            st.error(f"Plik musi zawierać kolumny: {required}")
+
+    # Próba wczytania w formacie polskim (średnik + cp1250), potem UTF-8
+    try:
+        df = pd.read_csv(uploaded, sep=';', encoding='cp1250')
+    except Exception:
+        try:
+            df = pd.read_csv(uploaded, sep=',', encoding='utf-8')
+        except Exception as e:
+            st.error(f"Błąd podczas wczytywania pliku: {e}")
             return
 
-        # Automatyczne kategoryzowanie
-        df = cat.categorize(df)
+    # Walidacja kolumn
+    required = ['Date', 'Description', 'Amount']
+    if not all(col in df.columns for col in required):
+        st.error(f"Plik musi zawierać kolumny: {required}")
+        return
 
-        # Edycja przez użytkownika (dropdowny)
-        edited = st.experimental_data_editor(
-            df,
-            column_config={
-                'category': st.column_config.SelectboxColumn('Kategoria', options=list(CATEGORIES.keys())),
-                'subcategory': st.column_config.SelectboxColumn(
-                    'Podkategoria', options=[sub for subs in CATEGORIES.values() for sub in subs]
-                ),
-            },
-            use_container_width=True
-        )
+    # Automatyczne kategoryzowanie
+    df = cat.categorize(df)
 
-        # Zapis i pobranie
-        if st.button("Zapisz i pobierz CSV"):
-            cat.save_assignments(edited[['Description', 'category', 'subcategory']])
-            csv = edited.to_csv(index=False).encode('utf-8')
-            st.download_button("Pobierz wynikowy CSV", csv, file_name="wynik.csv", mime='text/csv')
+    # Edycja przez użytkownika (dropdowny)
+    edited = st.experimental_data_editor(
+        df,
+        column_config={
+            'category': st.column_config.SelectboxColumn(
+                'Kategoria', options=list(CATEGORIES.keys())
+            ),
+            'subcategory': st.column_config.SelectboxColumn(
+                'Podkategoria',
+                options=[sub for subs in CATEGORIES.values() for sub in subs]
+            ),
+        },
+        use_container_width=True
+    )
+
+    # Zapis i pobranie
+    if st.button("Zapisz i pobierz CSV"):
+        cat.save_assignments(edited[['Description', 'category', 'subcategory']])
+        csv = edited.to_csv(index=False).encode('utf-8')
+        st.download_button("Pobierz wynikowy CSV", csv,
+                          file_name="wynik.csv", mime='text/csv')
 
 if __name__ == '__main__':
     main()
