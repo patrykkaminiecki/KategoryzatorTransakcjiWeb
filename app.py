@@ -3,6 +3,7 @@ import pandas as pd
 from rapidfuzz import process, fuzz
 from pathlib import Path
 import streamlit as st
+import io
 
 # Definicja kategorii i podkategorii do wyboru
 CATEGORIES = {
@@ -79,58 +80,59 @@ def main():
     st.markdown("Wczytaj plik CSV z transakcjami z banku, nadaj kategorie i pobierz wynik.")
 
     # Ścieżka do pliku bazy SQLite
-    db_path_str = st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db")
-    db_path = Path(db_path_str)
+    db_path = Path(st.sidebar.text_input("Ścieżka do bazy SQLite", value="assignments.db"))
     cat = Categorizer(db_path)
 
     uploaded = st.file_uploader("Wybierz plik CSV", type=["csv"])
     if not uploaded:
         return
 
-    # Próba wczytania: najpierw polski CSV (średnik + cp1250), z pominięciem 10 wierszy
-    try:
-        df = pd.read_csv(
-            uploaded,
-            sep=';',
-            encoding='cp1250',
-            skiprows=10,
-            decimal=','
-        )
-    except Exception:
-        # Jeśli nie zadziała, spróbuj UTF-8 i przecinka
-        try:
-            df = pd.read_csv(
-                uploaded,
-                sep=',',
-                encoding='utf-8',
-                skiprows=10,
-                decimal=','
-            )
-        except Exception as e:
-            st.error(f"Błąd podczas wczytywania pliku: {e}")
-            return
+    # Wczytanie surowych bajtów pliku
+    raw = uploaded.getvalue()
 
-    # Czyść nagłówki i usuń puste kolumny
+    # Spróbuj dwóch kodowań: polskie cp1250, potem utf-8
+    df = None
+    for enc, sep in [('cp1250', ';'), ('utf-8', ';'), ('utf-8', ',')]:
+        try:
+            text = raw.decode(enc, errors='ignore')
+            lines = text.splitlines()
+            # znajdź wiersz nagłówka
+            header_idx = next(i for i, line in enumerate(lines)
+                              if 'Data transakcji' in line and 'Kwota' in line)
+            # weź od nagłówka w dół
+            data_text = '\n'.join(lines[header_idx:])
+            df = pd.read_csv(io.StringIO(data_text), sep=sep, decimal=',')
+            break
+        except StopIteration:
+            continue
+        except Exception:
+            continue
+
+    if df is None:
+        st.error("Nie udało się znaleźć lub wczytać tabeli transakcji. Sprawdź format pliku.")
+        return
+
+    # Oczyść nagłówki
     df = df.loc[:, df.columns.notna()]
     df.columns = [col.strip() for col in df.columns]
 
-    # Zmień nazwy kolumn na te, których oczekuje logika
+    # Zmień nazwy kolumn
     df.rename(columns={
         'Data transakcji': 'Date',
         'Dane kontrahenta': 'Description',
         'Kwota': 'Amount'
     }, inplace=True)
 
-    # Walidacja obecności wymaganych kolumn
+    # Walidacja
     required = ['Date', 'Description', 'Amount']
     if not all(col in df.columns for col in required):
         st.error(f"Plik musi zawierać kolumny: {required}")
         return
 
-    # Automatyczne kategoryzowanie
+    # Automatyczna kategoryzacja
     df = cat.categorize(df)
 
-    # Interaktywny edytor z dropdownami dla kategorii/podkategorii
+    # Edycja w edytorze
     edited = st.experimental_data_editor(
         df,
         column_config={
@@ -145,15 +147,13 @@ def main():
         use_container_width=True
     )
 
-    # Zapisanie wyborów i pobranie wynikowego CSV
+    # Zapis i pobranie
     if st.button("Zapisz i pobierz CSV"):
         cat.save_assignments(edited[['Description', 'category', 'subcategory']])
         csv = edited.to_csv(index=False).encode('utf-8')
         st.download_button(
-            "Pobierz wynikowy CSV",
-            csv,
-            file_name="wynik.csv",
-            mime='text/csv'
+            "Pobierz wynikowy CSV", csv,
+            file_name="wynik.csv", mime='text/csv'
         )
 
 if __name__ == '__main__':
