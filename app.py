@@ -78,16 +78,15 @@ class Categorizer:
         return df
 
     def update_from_dataframe(self, df):
+        # Zawsze generuj assignments od nowa na podstawie dataframe
+        new_assignments = {}
         for _, row in df.iterrows():
             desc = str(row['Description']).strip()
             cat = str(row['category']).strip() if row['category'] is not None else ""
             sub = str(row['subcategory']).strip() if row['subcategory'] is not None else ""
-            if desc:
-                if cat and sub:
-                    self.assignments[desc] = (cat, sub)
-                elif desc in self.assignments:
-                    # Usuwamy przypisanie, jeśli cokolwiek jest puste
-                    del self.assignments[desc]
+            if desc and cat and sub:
+                new_assignments[desc] = (cat, sub)
+        self.assignments = new_assignments
 
 def auto_git_commit():
     token = st.secrets["GITHUB_TOKEN"]
