@@ -108,7 +108,7 @@ if uploaded_file is not None:
             uploaded_file,
             sep=';',
             encoding='cp1250',
-            header=18
+            header=19
         )
         df_trans.columns = [
             col.replace('"', '').replace('³', 'ł').replace('æ', 'ę').replace('¿', 'ż')
