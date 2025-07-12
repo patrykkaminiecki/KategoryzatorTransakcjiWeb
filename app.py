@@ -104,22 +104,30 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
-        # Wczytanie pliku z odpowiednim kodowaniem i separatorem
-        df_trans = pd.read_csv(uploaded_file, sep=';', encoding='cp1250')
+        df_trans = pd.read_csv(
+            uploaded_file,
+            sep=';',
+            encoding='cp1250',
+            header=10
+        )
+        df_trans.columns = [
+            col.replace('"', '').replace('³', 'ł').replace('æ', 'ę').replace('¿', 'ż')
+               .replace('¹', 'ą').replace('œ', 'ś').replace('ó', 'ó')
+               .replace('ä', 'a').replace('æ', 'ę').replace('Ÿ', 'Ż')
+               .replace('Ó', 'Ó').replace('£', 'Ł').replace('ñ', 'ń')
+               .replace('Ê', 'Ę').replace('ê', 'ę').replace('¿', 'ż')
+               .replace('³', 'ł').replace('Œ', 'Ś').replace('ú', 'ó')
+               .strip()
+            for col in df_trans.columns
+        ]
         st.success("Plik CSV wczytany pomyślnie!")
-
-        # Tworzenie unikalnego klucza dla każdej transakcji
-        # Klucz to połączenie tytułu i danych kontrahenta, co daje dużą unikalność
+        st.write("Kolumny w pliku:", df_trans.columns)
         df_trans['key'] = (df_trans['Tytuł'].fillna('') + ' ' + df_trans['Dane kontrahenta'].fillna('')).str.lower().str.strip()
-
-        # Połączenie transakcji z istniejącymi przypisaniami
         df_merged = pd.merge(df_trans, st.session_state.assignments, on='key', how='left')
         st.session_state.transactions = df_merged
-
     except Exception as e:
         st.error(f"Błąd podczas przetwarzania pliku: {e}")
-        st.warning("Upewnij się, że plik ma kodowanie 'cp1250' i jako separator używa średnika ';'.")
-
+        st.warning("Upewnij się, że plik ma kodowanie 'cp1250', separator ';' oraz nagłówek w wierszu 11.")
 
 # Jeśli transakcje są w stanie sesji, kontynuujemy pracę
 if st.session_state.transactions is not None:
