@@ -1,4 +1,3 @@
 streamlit
 pandas
-rapidfuzz
-gitpython
+PyGithub
