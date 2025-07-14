@@ -3,15 +3,16 @@ import io
 import streamlit as st
 from pathlib import Path
 from rapidfuzz import process, fuzz
-import git  # tylko jeśli korzystasz z auto‑push
+import git     # tylko jeśli używasz auto‑push
 import os
 
-# ---------------------------
-# 1) TWOJA STRUKTURA KATEGORII
-# ---------------------------
+# ------------------------
+# 1) DEFINICJA KATEGORII
+# ------------------------
 CATEGORIES = {
     'Przychody': ['Patryk', 'Jolka', 'Świadczenia', 'Inne'],
-    'Rachunki': ['Prąd', 'Gaz', 'Woda', 'Odpady', 'Internet', 'Telefon', 'Subskrypcje', 'Przedszkole', 'Żłobek', 'Podatki'],
+    'Rachunki': ['Prąd', 'Gaz', 'Woda', 'Odpady', 'Internet', 'Telefon',
+                 'Subskrypcje', 'Przedszkole', 'Żłobek', 'Podatki'],
     'Transport': ['Paliwo', 'Ubezpieczenie', 'Parking', 'Przeglądy'],
     'Kredyty': ['Hipoteka', 'Samochód', 'TV+Dyson'],
     'Jedzenie': ['Zakupy Spożywcze'],
@@ -27,21 +28,18 @@ CATEGORIES = {
 
 ASSIGNMENTS_FILE = Path("assignments.csv")
 
-# ---------------------------------
-# 2) KLASA DO ZARZĄDZANIA ASSIGNMENT
-# ---------------------------------
+# ------------------------------------
+# 2) KLASA DO ZARZĄDZANIA PRZYPISANIAMI
+# ------------------------------------
 class Categorizer:
     def __init__(self):
-        # wczytaj istniejące przypisania
         self.map = {}
         if ASSIGNMENTS_FILE.exists():
             try:
                 df = pd.read_csv(ASSIGNMENTS_FILE)
-                self.map = {
-                    desc: (row['category'], row['subcategory'])
-                    for _, row in df.iterrows()
-                    for desc in [row['description']]
-                }
+                for _, row in df.iterrows():
+                    desc = row['description']
+                    self.map[desc] = (row['category'], row['subcategory'])
             except Exception:
                 st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
 
@@ -49,56 +47,55 @@ class Categorizer:
         if not self.map:
             return None
         best, score, _ = process.extractOne(desc, list(self.map.keys()), scorer=fuzz.token_sort_ratio)
-        if score > 80:
-            return self.map[best]
-        return None
+        return self.map[best] if score > 80 else None
 
-    def assign(self, desc: str, cat: str, sub: str):
-        self.map[desc] = (cat, sub)
+    def assign(self, key: str, cat: str, sub: str):
+        self.map[key] = (cat, sub)
 
     def save(self):
         df = pd.DataFrame([
-            {"description": desc, "category": cat, "subcategory": sub}
-            for desc, (cat, sub) in self.map.items()
+            {"description": key, "category": cat, "subcategory": sub}
+            for key, (cat, sub) in self.map.items()
         ])
         df.to_csv(ASSIGNMENTS_FILE, index=False)
 
-# ----------------------------------------------------
-# 3) FUNKCJA DO AUTO‑PUSH (opcjonalnie: GitPython + Secrets)
-# ----------------------------------------------------
+# -----------------------------------------------------
+# 3) OPCJONALNIE: AUTO‑PUSH DO GITHUB (GitPython + SECRETS)
+# -----------------------------------------------------
 def auto_git_commit():
     token = st.secrets["GITHUB_TOKEN"]
     repo_name = st.secrets["GITHUB_REPO"]
     author = st.secrets["GITHUB_AUTHOR"]
     repo_url = f"https://{token}@github.com/{repo_name}.git"
 
+    # Klon lub otwórz repo
     if not Path(".git").exists():
         git.Repo.clone_from(repo_url, ".", branch="main")
         repo = git.Repo(".")
     else:
         repo = git.Repo(".")
 
-    # nadpisz origin z tokenem
+    # Nadpisz origin
     if "origin" not in [r.name for r in repo.remotes]:
         repo.create_remote("origin", repo_url)
     else:
         repo.remotes.origin.set_url(repo_url)
 
+    # Dodaj i push
     repo.index.add([str(ASSIGNMENTS_FILE)])
     if repo.is_dirty():
         name, email = author.replace(">", "").split(" <")
         repo.index.commit("Automatyczny zapis assignments.csv", author=git.Actor(name, email))
         repo.remotes.origin.push()
 
-# ----------------------------------------
-# 4) POMOCNICZA FUNKCJA: wczytywanie CSV
-# ----------------------------------------
+# ------------------------------------
+# 4) FUNKCJA WCZYTANIA CSV Z BANKU
+# ------------------------------------
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
     for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             text = raw.decode(enc, errors='ignore').splitlines()
-            # znajdź pierwszy wiersz, który zawiera „Data” i „Kwota”
             idx = next(i for i, line in enumerate(text) if 'Data' in line and 'Kwota' in line)
             data = '\n'.join(text[idx:])
             df = pd.read_csv(io.StringIO(data), sep=sep, decimal=',')
@@ -107,29 +104,28 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
             continue
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
-# -------------------------
+# --------------------------
 # 5) GŁÓWNA FUNKCJA STREAMLIT
-# -------------------------
+# --------------------------
 def main():
     st.title("🗂 Kategoryzator transakcji bankowych")
 
-    # 5.1) Wczytaj przypisania
+    # 5.1) Inicjuj Categorizer
     cat = Categorizer()
 
-    # 5.2) Upload pliku bankowego
-    uploaded = st.file_uploader("Wybierz CSV z banku", type=["csv"])
+    # 5.2) Upload pliku
+    uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
     if not uploaded:
-        st.info("Wczytaj plik, aby zacząć kategoryzować.")
+        st.info("Wczytaj plik, żeby rozpocząć.")
         return
 
-    # 5.3) Parsuj i mapuj kolumny
+    # 5.3) Wczytaj i zmapuj
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
         st.error(str(e))
         return
 
-    # przytnij i mapuj
     df_raw = df_raw.loc[:, df_raw.columns.notna()]
     df_raw.columns = [c.strip() for c in df_raw.columns]
     df_raw.rename(columns={
@@ -141,85 +137,85 @@ def main():
         'Kwota blokady/zwolnienie blokady': 'Kwota blokady'
     }, inplace=True)
 
-    # wybierz kolumny potrzebne
     cols = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']
     df = df_raw[cols].copy()
 
-    # 5.4) Podziel na grupy po podobnym opisie
-    descriptions = df['Description'].fillna('').unique().tolist()
-    to_process = set(descriptions)
+    # 5.4) Utwórz composite key i grupuj
+    df['_group_key'] = df['Description'].fillna('') + '|' + df['Nr rachunku'].fillna('')
+    keys = df['_group_key'].unique().tolist()
+    to_process = set(keys)
     groups = []
     while to_process:
-        desc = to_process.pop()
-        # znajdź wszystkie podobne opisy
-        matches = [d for d in descriptions
-                   if fuzz.token_sort_ratio(desc, d) > 80]
-        # usuń z to_process
+        k = to_process.pop()
+        matches = [x for x in keys if fuzz.token_sort_ratio(k, x) > 80]
         for m in matches:
             to_process.discard(m)
         groups.append(matches)
 
-    # 5.5) Dla każdej grupy: pytanie o kategorię
-    st.markdown("### Przypisz kategorie dla wykrytych grup transakcji")
+    # 5.5) Bulk‑assign: dla każdej grupy pytaj o kategorię
+    st.markdown("### Przypisz kategorię do każdej grupy transakcji")
     for group in groups:
-        # sprawdź, czy już przypisane
         if all(g in cat.map for g in group):
             continue
-        # zaproponuj kategorię na podstawie pierwszego w grupie
-        sugg = cat.suggest(group[0]) or ("", "")
-        col1, col2 = st.columns([2,1])
+        desc0, acct0 = group[0].split('|')
+        sugg = cat.suggest(group[0]) or ("","")
+        col1, col2 = st.columns([3,2])
         with col1:
-            st.write(f"**Opis:** `{group[0]}`  _(oraz {len(group)-1} podobnych)_")
+            st.write(f"**{desc0}** _(rachunek: {acct0 or '—'})_ + {len(group)-1} podobnych")
         with col2:
-            sel_cat = st.selectbox("Kategoria", options=list(CATEGORIES.keys()),
+            sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
                                    index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
                                    key="cat_"+group[0])
-            sel_sub = st.selectbox("Podkategoria",
-                                   options=CATEGORIES[sel_cat],
-                                   index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES[sel_cat] else 0,
+            sel_sub = st.selectbox("Podkategoria", CATEGORIES[sel_cat],
+                                   index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
                                    key="sub_"+group[0])
-        # zapisz dla całej grupy
         for g in group:
             cat.assign(g, sel_cat, sel_sub)
 
     st.markdown("---")
-    st.success("Wszystkie grupy mają teraz przypisane kategorie. Możesz jeszcze skorygować pojedyncze transakcje poniżej.")
+    st.success("Grupy oznaczone – możesz skorygować poszczególne transakcje.")
 
-    # 5.6) Przypisz kategorie do df i pokaż edytor
-    df['category'] = df['Description'].apply(lambda d: cat.map.get(d, ("", ""))[0])
-    df['subcategory'] = df['Description'].apply(lambda d: cat.map.get(d, ("", ""))[1])
+    # 5.6) Przygotuj finalną tabelę (bez Nr rachunku)
+    df['category'] = df['_group_key'].apply(lambda k: cat.map.get(k,('',''))[0])
+    df['subcategory'] = df['_group_key'].apply(lambda k: cat.map.get(k,('',''))[1])
+    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited = st.data_editor(
-        df,
+        final,
         column_config={
             'Date': st.column_config.Column("Data"),
             'Description': st.column_config.Column("Opis"),
             'Tytuł': st.column_config.Column("Tytuł"),
-            'Nr rachunku': st.column_config.Column("Rachunek"),
             'Amount': st.column_config.NumberColumn("Kwota", format="%.2f"),
             'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
-            'subcategory': st.column_config.SelectboxColumn("Podkategoria", options=[s for subs in CATEGORIES.values() for s in subs])
+            'subcategory': st.column_config.SelectboxColumn("Podkategoria",
+                                 options=[s for subs in CATEGORIES.values() for s in subs])
         },
         hide_index=True,
         use_container_width=True
     )
 
-    # 5.7) Zapis i push
+    # 5.7) Zapis i (opcjonalnie) push
     if st.button("💾 Zapisz i wyeksportuj"):
-        # uaktualnij mapę
+        # uaktualnij mapę na podstawie edycji
         for _, row in edited.iterrows():
-            cat.assign(row['Description'], row['category'], row['subcategory'])
-        # zapisz assignments.csv
+            # odtwórz klucz: description|rachunek
+            # pobierz rachunek z df (według Description)
+            acct = df.loc[df['Description']==row['Description'], 'Nr rachunku'].iloc[0]
+            key = f"{row['Description']}|{acct}"
+            cat.assign(key, row['category'], row['subcategory'])
         cat.save()
-        st.success("Zapisano przypisania do assignments.csv")
-        # auto‑push
+        st.success("Zapisano assignments.csv")
+
+        # opcjonalnie: push do GitHuba
         try:
             auto_git_commit()
-            st.success("Wysłano assignments.csv do GitHub")
+            st.success("Wysłano assignments.csv do GitHuba")
         except Exception as e:
             st.warning(f"Push nieudany: {e}")
-        # pobierz wynik
+
+        # pobierz finalny CSV
         out = edited.to_csv(index=False).encode('utf-8')
         st.download_button("⬇️ Pobierz wynikowy CSV", data=out, file_name="wynik.csv")
 
