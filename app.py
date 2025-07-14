@@ -219,36 +219,36 @@ def main():
         try: auto_git_commit(); st.success("Wysłano do GitHuba")
         except: st.warning("Push nieudany")
 
-       # --- 6.4) Raport i wykres ---
-st.markdown("## 📊 Raport: ilość i suma według kategorii")
-
-def format_amount(val):
-    return f"{abs(val):,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
-
-grouped = final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
-grouped['formatted'] = grouped.apply(lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
-
-total = grouped.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
-total['formatted'] = total.apply(lambda r: f"{r['category']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
-
-# Przenieś "Przychody" na początek, pozostałe sortuj A-Z
-total = pd.concat([
-    total[total['category'] == 'Przychody'],
-    total[total['category'] != 'Przychody'].sort_values('category')
-])
-
-# Styl nagłówka kategorii
-def styled_category(label):
-    return f"<div style='font-size:1.2rem; font-weight:bold'>{label}</div>"
-
-for _, row in total.iterrows():
-    cat = row['category']
-    subs = grouped[grouped['category'] == cat]
-
-    with st.expander(styled_category(row['formatted']), expanded=False):
-        for _, sub in subs.iterrows():
-            st.markdown(f"- {sub['formatted']}")
-
+           # --- 6.4) Raport i wykres ---
+    st.markdown("## 📊 Raport: ilość i suma według kategorii")
+    
+    def format_amount(val):
+        return f"{abs(val):,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
+    
+    grouped = final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
+    grouped['formatted'] = grouped.apply(lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
+    
+    total = grouped.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
+    total['formatted'] = total.apply(lambda r: f"{r['category']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
+    
+    # Przenieś "Przychody" na początek, pozostałe sortuj A-Z
+    total = pd.concat([
+        total[total['category'] == 'Przychody'],
+        total[total['category'] != 'Przychody'].sort_values('category')
+    ])
+    
+    # Styl nagłówka kategorii
+    def styled_category(label):
+        return f"<div style='font-size:1.2rem; font-weight:bold'>{label}</div>"
+    
+    for _, row in total.iterrows():
+        cat = row['category']
+        subs = grouped[grouped['category'] == cat]
+    
+        with st.expander(styled_category(row['formatted']), expanded=False):
+            for _, sub in subs.iterrows():
+                st.markdown(f"- {sub['formatted']}")
+    
 
 
 
