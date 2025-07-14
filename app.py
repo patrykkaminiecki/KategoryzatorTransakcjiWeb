@@ -33,8 +33,18 @@ ASSIGNMENTS_FILE = Path("assignments.csv")
 # 2) PRZYGOTUJ EMBEDDINGI DLA PAR KATEGORIA — PODKATEGORIA
 # --------------------------------------------------
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
-EMBED_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
-PAIR_EMBS = EMBED_MODEL.encode(CATEGORY_PAIRS, convert_to_numpy=True)
+
+@st.cache_resource(show_spinner=False)
+def get_embed_model():
+    return SentenceTransformer('all-MiniLM-L6-v2')
+
+@st.cache_data(show_spinner=False)
+def get_pair_embs():
+    model = get_embed_model()
+    return model.encode(CATEGORY_PAIRS, convert_to_numpy=True)
+
+EMBED_MODEL = get_embed_model()
+PAIR_EMBS = get_pair_embs()
 
 # ------------------------------------
 # 3) KLASA DO ZARZĄDZANIA PRZYPISANIAMI
@@ -90,6 +100,7 @@ def auto_git_commit():
 # ------------------------------------
 # 5) FUNKCJA WCZYTANIA CSV Z BANKU
 # ------------------------------------
+@st.cache_data(show_spinner=False)
 def load_bank_csv(uploaded)->pd.DataFrame:
     raw=uploaded.getvalue()
     for enc,sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
