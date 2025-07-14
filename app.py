@@ -240,7 +240,7 @@ def main():
         alt.value("red")
     )
     
-        base = (
+    base = (
         alt.Chart(chart_df)
            .encode(
                x=alt.X("category:N", sort=order, axis=None),
