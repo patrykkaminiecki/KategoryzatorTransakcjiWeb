@@ -7,6 +7,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import git  # opcjonalnie, jeśli auto‑push
+import re
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -48,7 +49,11 @@ PAIR_EMBS = get_pair_embs()
 # 3) CATEGORIZER
 # ------------------------------------
 def clean_desc(s):
-    return str(s).strip().replace("'", "").replace('"', '')
+    # usuń ' oraz " i zbędne białe znaki, a potem zredukuj wszystkie spacje do jednej
+    text = str(s).replace("'", "").replace('"', "")
+    # zamień dowolny ciąg białych znaków na pojedynczą spację
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
 
 class Categorizer:
     def __init__(self):
