@@ -208,10 +208,10 @@ def main():
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
     def fmt(v): return f"{abs(v):,.2f}".replace(",", " ").replace(".", ",")
     for _, r in total.iterrows():
-        label = f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"
-        with st.expander(f"**{label}**"):
-            # nagłówek kategorii większą czcionką i pogrubiony
-            st.markdown(f"## **{label}**")
+        # expander z samą nazwą kategorii
+        with st.expander(r['category']):
+            # wewnątrz pokaż pełny, pogrubiony nagłówek z liczbą i sumą
+            st.markdown(f"## **{r['category']} ({r['count']}) – {fmt(r['sum'])}**")
             subs = grouped[(grouped['category']==r['category']) &
                            (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
