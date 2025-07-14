@@ -6,6 +6,7 @@ from rapidfuzz import process, fuzz
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
+import altair as alt
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -221,6 +222,36 @@ def main():
                     f"<span style='font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</span>",
                     unsafe_allow_html=True
                 )
+        # -------------------------
+    # 6.x) WYKRES: z kolorami
+    # -------------------------
+    st.markdown("## 📈 Wykres: suma według kategorii")
+    
+    # Przygotuj DataFrame z total (wynik z get_report_tables)
+    # total ma kolumny: category, count, sum
+    chart_df = total.copy()
+    
+    # Definiujemy warunek kolorowania: zielony jeśli Przychody, inaczej czerwony
+    color_cond = alt.condition(
+        alt.datum.category == 'Przychody',
+        alt.value("green"),
+        alt.value("red")
+    )
+    
+    chart = (
+        alt.Chart(chart_df)
+           .mark_bar()
+           .encode(
+               x=alt.X("category:N", title="Kategoria"),
+               y=alt.Y("sum:Q", title="Suma"),
+               color=color_cond,
+               tooltip=[alt.Tooltip("category:N", title="Kategoria"),
+                        alt.Tooltip("sum:Q", title="Suma", format=",.2f")]
+           )
+           .properties(width="container")
+    )
+    
+    st.altair_chart(chart, use_container_width=True)
 
 if __name__ == "__main__":
     main()
