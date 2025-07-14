@@ -1,4 +1,52 @@
 description,category,subcategory
+69105001451000009839494011 ,Inne,Prezenty
+57832800078009000000527086 ,Inne,Prezenty
+04834500060103000000016860 ,Inne,Prezenty
+32102046650000310200486852 ,Inne,Prezenty
+25109000045703000092000576 ,Inne,Prezenty
+36833500030401665620000004 ,Przychody,Inne
+57188000090000001320078002 ,Przychody,Inne
+1915031/19730 ,Przychody,Inne
+18105015201000009032247653 ,Inne,Prezenty
+91105001585020000421965329 ,Przychody,Inne
+46116022020000000641294136 ,Inne,Prezenty
+84833500030114888720000007 ,Inne,Prezenty
+57102010262883000023889612 ,Inne,Prezenty
+26212000010001820005015664 ,Inne,Prezenty
+39109026200000000148650517 ,Przychody,Inne
+90833500030401665620000002 ,Przychody,Inne
+82102056040000010289963017 ,Przychody,Inne
+60102018660000180200580498 ,Inne,Prezenty
+49160014621713652900000001 ,Inne,Prezenty
+27105000441000002514060447 ,Inne,Prezenty
+5510546 ,Inne,Prezenty
+5510535 ,Inne,Prezenty
+39144010130000000008187606 ,Inne,Prezenty
+35116022020000000371598638 ,Inne,Prezenty
+52102010263666336405800005 ,Inne,Prezenty
+12124069608960104708496017 ,Inne,Prezenty
+05249000050000400075294746 ,Przychody,Inne
+97105017641000009837560508 ,Inne,Prezenty
+84105000441000002482602030 ,Inne,Prezenty
+76101000550202210000070000 ,Inne,Prezenty
+JMP S.A. BIEDRONKA 4306  GDANSK  PO,Oszczędności,Inwestycje
+SMYK SPOLKA AKCYJNA  GDANSK  POL,Nadpłata Długów,Samochód
+EUROPARK SP Z O O  WARSZAWA  POL,Oszczędności,Fundusz celowy
+LIDL KARTUSKA  GDANSK  POL,Gotówka,Wpłata
+OTCF GD4  GDANSK  POL,Inne,Prezenty
+RO AN SP Z OO  LEZNO  POL,Inne,Prezenty
+ARKROD GDANSK OUTLET  GDANSK  POL,Inne,Prezenty
+SIZEER DESIGNER OUTLET  GDANSK 8017,Inne,Prezenty
+PayU Grunwaldzka 186 Poznan,Oszczędności,Fundusz celowy
+PEPCO 110331 GDANSK 27  GDANSK  POL,Nadpłata Długów,Samochód
+reserved.com ul. ŁĄKOWA 39/44 GDAŃSK,Oszczędności,Fundusz celowy
+allegro.pl WIERZBIĘCICE 1B Poznań,Oszczędności,Fundusz celowy
+Paynow Prosta 18 Warszawa,Inne,Prezenty
+ALLEGRO SP. Z O.O. ul. Wierzbiecice 1B Poznan,Oszczędności,Fundusz celowy
+PayPro S.A. Pastelowa 8 Poznan,Oszczędności,Fundusz celowy
+FLOWBIRD APP  LODZ  POL 2213137142 7523,Inne,Prezenty
+FLOWBIRD APP  LODZ  POL,Transport,Parking
+,Inne,Prezenty
 '69105001451000009839494011 ',Inne,Prezenty
 '57832800078009000000527086 ',Inne,Prezenty
 '04834500060103000000016860 ',Inne,Prezenty
@@ -15,35 +63,13 @@ description,category,subcategory
 '26212000010001820005015664 ',Inne,Prezenty
 '39109026200000000148650517 ',Przychody,Inne
 '90833500030401665620000002 ',Przychody,Inne
-'82102056040000010289963017 ',Przychody,Inne
-'60102018660000180200580498 ',Inne,Prezenty
-'49160014621713652900000001 ',Inne,Prezenty
-'27105000441000002514060447 ',Inne,Prezenty
-'5510546 ',Inne,Prezenty
-'5510535 ',Inne,Prezenty
-'39144010130000000008187606 ',Inne,Prezenty
-'35116022020000000371598638 ',Inne,Prezenty
-'52102010263666336405800005 ',Inne,Prezenty
-'12124069608960104708496017 ',Inne,Prezenty
-'05249000050000400075294746 ',Przychody,Inne
-'97105017641000009837560508 ',Inne,Prezenty
-'84105000441000002482602030 ',Inne,Prezenty
-'76101000550202210000070000 ',Inne,Prezenty
  JMP S.A. BIEDRONKA 4306  GDANSK  PO ,Oszczędności,Inwestycje
  SMYK SPOLKA AKCYJNA  GDANSK  POL ,Nadpłata Długów,Samochód
  EUROPARK SP Z O O  WARSZAWA  POL ,Oszczędności,Fundusz celowy
  LIDL KARTUSKA  GDANSK  POL ,Gotówka,Wpłata
  OTCF GD4  GDANSK  POL ,Inne,Prezenty
- RO AN SP Z OO  LEZNO  POL ,Inne,Prezenty
+ RO AN SP Z OO  LEZNO  POL ,Transport,Parking
  ARKROD GDANSK OUTLET  GDANSK  POL ,Inne,Prezenty
  SIZEER DESIGNER OUTLET  GDANSK 8017 ,Inne,Prezenty
  PayU Grunwaldzka 186 Poznan ,Oszczędności,Fundusz celowy
  PEPCO 110331 GDANSK 27  GDANSK  POL ,Nadpłata Długów,Samochód
- reserved.com ul. ŁĄKOWA 39/44 GDAŃSK ,Oszczędności,Fundusz celowy
- allegro.pl WIERZBIĘCICE 1B Poznań ,Oszczędności,Fundusz celowy
- Paynow Prosta 18 Warszawa ,Inne,Prezenty
- ALLEGRO SP. Z O.O. ul. Wierzbiecice 1B Poznan ,Oszczędności,Fundusz celowy
- PayPro S.A. Pastelowa 8 Poznan ,Oszczędności,Fundusz celowy
- FLOWBIRD APP  LODZ  POL 2213137142 7523 ,Inne,Prezenty
- FLOWBIRD APP  LODZ  POL ,Transport,Parking
-  ,Inne,Prezenty
