@@ -198,10 +198,12 @@ def main():
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
     for i_group, idxs in enumerate(groups):
         first=idxs[0]
-        acct=df.loc[first,'Nr rachunku']; key=str(acct) if pd.notna(acct) else str(df.loc[first,'Description'])
+        desc = str(df.loc[first, 'Description'])
+        tit = str(df.loc[first, 'Tytuł']) if 'Tytuł' in df.columns else ''
+        key = clean_desc(desc + '|' + tit)
         descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; titles=[str(x) for x in df.loc[idxs,'Tytuł'].unique()]
         amt=df.loc[first,'Amount']
-        st.write(f"**{key}** – {amt:.2f}\xa0PLN")
+        st.write(f"**{desc} | {tit}** – {amt:.2f}\xa0PLN")
         st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
         sugg=cat.suggest(key,amt) or ("","")
         sel_cat=st.selectbox("Kategoria", list(CATEGORIES.keys()),
@@ -285,7 +287,7 @@ def main():
         ], ignore_index=True)
         return grouped, total
     # Nowa logika: show_assign_form True jeśli są nieprzypisane klucze
-    keys_list = [clean_desc(str(r['Nr rachunku'])) if pd.notna(r['Nr rachunku']) else clean_desc(str(r['Description'])) for _, r in df.iterrows()]
+    keys_list = [clean_desc(str(r['Description']) + '|' + str(r['Tytuł'])) for _, r in df.iterrows()]
     keys_list = [k for k in keys_list if k]
     unmapped = [k for k in keys_list if cat.map.get(clean_desc(k), ("", ""))[0] == "" or cat.map.get(clean_desc(k), ("", ""))[1] == ""]
     st.info(f'Nieprzypisane klucze: {[clean_desc(k) for k in unmapped]}' if unmapped else 'Wszystkie transakcje przypisane.')
