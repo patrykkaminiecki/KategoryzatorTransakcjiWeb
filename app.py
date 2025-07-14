@@ -220,29 +220,32 @@ def main():
         except: st.warning("Push nieudany")
 
         # --- 6.4) Raport i wykres ---
-    st.markdown("## 📊 Raport: ilość i suma według kategorii")
-    
-    def format_amount(val):
-        return f"{val:,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
-    
-    grouped = final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
-    grouped['formatted'] = grouped.apply(lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
-    
-    total = grouped.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
-    total['label'] = total.apply(lambda r: f"{r['category']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
-    
-    # Kategoria "Przychody" na górze
-    total = pd.concat([
-        total[total['category'] == 'Przychody'],
-        total[total['category'] != 'Przychody'].sort_values('category')
-    ])
-    
-    for _, row in total.iterrows():
-        cat = row['category']
-        with st.expander(label=row['label']):
-            subs = grouped[grouped['category'] == cat]
-            for _, r in subs.iterrows():
-                st.markdown(f"- {r['formatted']}")
+st.markdown("## 📊 Raport: ilość i suma według kategorii")
+
+def format_amount(val):
+    val = abs(val)
+    return f"{val:,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
+
+grouped = final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
+grouped['formatted'] = grouped.apply(lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
+
+total = grouped.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
+total['label'] = total.apply(lambda r: f"<strong style='font-size:1.1rem'>{r['category']} ({r['count']}) – {format_amount(r['sum'])}</strong>", axis=1)
+
+# Kategoria "Przychody" na górze
+total = pd.concat([
+    total[total['category'] == 'Przychody'],
+    total[total['category'] != 'Przychody'].sort_values('category')
+])
+
+for _, row in total.iterrows():
+    cat = row['category']
+    with st.expander(label=None):
+        st.markdown(row['label'], unsafe_allow_html=True)
+        subs = grouped[grouped['category'] == cat]
+        for _, r in subs.iterrows():
+            st.markdown(f"- {r['formatted']}")
+
 
 
 
