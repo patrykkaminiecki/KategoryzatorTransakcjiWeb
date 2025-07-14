@@ -180,7 +180,18 @@ def main():
         },
         hide_index=True, use_container_width=True
     )
-
+    # ——————— Podgląd z row‑stylingiem ———————
+    def highlight_row(row):
+        # zielone tło dla kwoty >=0, czerwone dla <0
+        bg = 'background-color: #e0ffe0' if row['Amount'] >= 0 else 'background-color: #ffe0e0'
+        return [bg] * len(row)
+    
+    st.markdown("**Podgląd z kolorami:**")
+    st.dataframe(
+        edited.style.apply(highlight_row, axis=1),
+        use_container_width=True
+    )
+# ————————————————————————————————————————
     if st.button("💾 Zapisz zmiany do assignments.csv"):
         keys_list = df['key'].tolist()
         for idx, row in enumerate(edited.itertuples(index=False)):
