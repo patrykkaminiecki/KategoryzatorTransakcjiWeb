@@ -219,20 +219,20 @@ def main():
         try: auto_git_commit(); st.success("Wysłano do GitHuba")
         except: st.warning("Push nieudany")
 
-        # --- 6.4) Raport z podsumowaniem kategorii i podkategorii ---
+            # --- 6.4) Raport z podsumowaniem kategorii i podkategorii ---
     st.markdown("## 📊 Raport: ilość i suma według kategorii")
     
     # Agregacja
     grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
     total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
     
-    # Formatowanie
+    # Formatowanie – bez separatorów tysięcy, tylko przecinek dziesiętny
     grouped['formatted'] = grouped.apply(
-        lambda r: f"{r['subcategory']} ({r['count']}) – {r['sum']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        lambda r: f"{r['subcategory']} ({r['count']}) – {r['sum']:.2f}".replace(".", ","),
         axis=1
     )
     total['formatted'] = total.apply(
-        lambda r: f"{r['category']} ({r['count']}) – {r['sum']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        lambda r: f"{r['category']} ({r['count']}) – {r['sum']:.2f}".replace(".", ","),
         axis=1
     )
     
@@ -240,14 +240,14 @@ def main():
     total['sort'] = total['category'].apply(lambda x: 0 if x == 'Przychody' else 1)
     total = total.sort_values(by=['sort', 'category'])
     
-    # Wyświetlenie jako expandery
+    # Expandery z klikaniem w kategorię (bez dodatkowego opisu)
     for _, row in total.iterrows():
         cat = row['category']
-        st.markdown(f"### {row['formatted']}")
-        with st.expander("Szczegóły"):
+        with st.expander(row['formatted']):
             subs = grouped[grouped['category'] == cat]
             for _, r in subs.iterrows():
                 st.markdown(f"- {r['formatted']}")
+
 
 
     # --- 6.5) Wykres słupkowy sumy kwot ---
