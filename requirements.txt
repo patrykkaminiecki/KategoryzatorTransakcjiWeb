@@ -1,4 +1,6 @@
 streamlit
 pandas
 rapidfuzz
-gitpython
+gitpython        # jeśli chcesz auto‑push
+sentence-transformers
+scikit-learn
