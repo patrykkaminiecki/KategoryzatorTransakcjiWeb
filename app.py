@@ -276,6 +276,10 @@ def main():
     st.write('Kategorie w final:', final['category'].unique())
     st.write('Podkategorie w final:', final['subcategory'].unique())
     st.write('FLOWBIRD w Description:', final[final['Description'].str.contains('FLOWBIRD', case=False, na=False)])
+    st.write('Transport z Amount!=0:', final[(final['category'] == 'Transport') & (final['Amount'] != 0)])
+    # Pokaż agregację grouped przed filtrowaniem
+    grouped_raw = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
+    st.write('Agregacja grouped (przed filtrem count>0):', grouped_raw)
     grouped, total = get_report_tables(final)
 
     for _, row in total.iterrows():
