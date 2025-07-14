@@ -241,9 +241,9 @@ def main():
     # Usuń podkategorie bez transakcji
     grouped = grouped[grouped['count'] > 0]
 
-    # Agregacja sum i liczby dla kategorii (tylko te, które mają podkategorie z count > 0)
-    total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
-    total = total[total['count'] > 0]  # <-- dodaj ten filtr!
+    # Agregacja sum i liczby dla kategorii: NIE filtruj po count>0, bo mogą być transakcje bez podkategorii!
+    total = final.groupby('category')['Amount'].agg(['count', 'sum']).reset_index()
+    # NIE filtruj total po count>0
 
     # Sortowanie: Przychody na górze, reszta A-Z
     total = pd.concat([
