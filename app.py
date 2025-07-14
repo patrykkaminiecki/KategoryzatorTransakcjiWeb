@@ -206,17 +206,33 @@ def main():
 
     grouped, total = get_report_tables(edited)
 
-    st.markdown("## 📊 Raport: ilość i suma wg kategorii")
-    def fmt(v): return f"{abs(v):,.2f}".replace(",", " ").replace(".", ",")
+   st.markdown("## 📊 Raport: ilość i suma wg kategorii")
+
+    def fmt(val):
+        return f"{abs(val):,.2f}".replace(",", " ").replace(".", ",")
     
-    for _, r in total.iterrows():
-        # obecnie używasz tylko r['category'] jako label – zmień to:
-        with st.expander(f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"):
-            subs = grouped[(grouped['category']==r['category']) &
-                           (grouped['subcategory']!=r['category'])]
-            for _, s in subs.iterrows():
-                # pogrubiamy tylko kwotę:
-                st.markdown(f"- {s['subcategory']} ({s['count']}) – **{fmt(s['sum'])}**")
+    for _, row in total.iterrows():
+        cat = row['category']
+        count = row['count']
+        total_sum = fmt(row['sum'])
+    
+        # 🔸 Nagłówek kategorii: nazwa większa i pogrubiona, reszta normalnie
+        expander_label = f"<span style='font-size:18px'><strong>{cat}</strong></span> ({count}) – {total_sum}"
+    
+        subs = grouped[grouped['category'] == cat].copy()
+        subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
+    
+        with st.expander(expander_label, expanded=False):
+            for _, sub in subs.iterrows():
+                sub_cat = sub['subcategory']
+                sub_count = sub['count']
+                sub_sum = fmt(sub['sum'])
+    
+                # 🔹 Wiersz podkategorii: pogrubiona nazwa podkategorii, reszta normalnie
+                st.markdown(
+                    f"<span style='font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</span>",
+                    unsafe_allow_html=True
+                )
 
 if __name__ == "__main__":
     main()
