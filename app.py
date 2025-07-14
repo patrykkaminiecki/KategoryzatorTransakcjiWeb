@@ -252,7 +252,7 @@ def main():
     bars = base.mark_bar()
     
     labels = base.mark_text(
-        dy=-5,  # przesunięcie w górę w obrębie słupka; dostosuj w razie potrzeby
+        dy=-10,  # przesunięcie w górę w obrębie słupka; dostosuj w razie potrzeby
         color="black"
     ).encode(
         text=alt.Text("sum:Q", format=",.2f")
