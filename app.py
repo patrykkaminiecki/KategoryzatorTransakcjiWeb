@@ -240,8 +240,19 @@ def main():
         total[total['category'] != 'Przychody'].sort_values('category')
     ], ignore_index=True)
 
-    def styled_category(label):
-        return f"<div style='font-size:1.2rem; font-weight:bold'>{label}</div>"
+    # --- Funkcja raportowa pod cache ---
+    def get_report_tables(final):
+        grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
+        grouped = grouped[grouped['count'] > 0]
+        total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
+        total = total[total['count'] > 0]
+        total = pd.concat([
+            total[total['category'] == 'Przychody'],
+            total[total['category'] != 'Przychody'].sort_values('category')
+        ], ignore_index=True)
+        return grouped, total
+
+    grouped, total = get_report_tables(final)
 
     for _, row in total.iterrows():
         cat = row['category']
@@ -249,12 +260,12 @@ def main():
         label = f"{cat} ({row['count']}) – {sum_text}"
         subs = grouped[(grouped['category'] == cat) & (grouped['subcategory'] != cat)]
         if not subs.empty:
-            with st.expander(styled_category(label), expanded=False):
+            with st.expander(label, expanded=False):
                 for _, sub in subs.iterrows():
                     sublabel = f"{sub['subcategory']} ({sub['count']}) – {format_amount(sub['sum'])}"
                     st.markdown(f"• {sublabel}")
         else:
-            st.markdown(styled_category(label), unsafe_allow_html=True)
+            st.markdown(f"**{label}**")
 
 if __name__=="__main__":
     main()
