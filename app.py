@@ -219,20 +219,23 @@ def main():
         try: auto_git_commit(); st.success("Wysłano do GitHuba")
         except: st.warning("Push nieudany")
 
-            # --- 6.4) Raport z podsumowaniem kategorii i podkategorii ---
+                # --- 6.4) Raport z podsumowaniem kategorii i podkategorii ---
     st.markdown("## 📊 Raport: ilość i suma według kategorii")
     
     # Agregacja
     grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
     total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
     
-    # Formatowanie – bez separatorów tysięcy, tylko przecinek dziesiętny
+    # Format liczbowy: 13 452,17
+    def format_amount(val):
+        return f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", " ").replace("\u202f", " ")
+    
     grouped['formatted'] = grouped.apply(
-        lambda r: f"{r['subcategory']} ({r['count']}) – {r['sum']:.2f}".replace(".", ","),
+        lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}",
         axis=1
     )
     total['formatted'] = total.apply(
-        lambda r: f"{r['category']} ({r['count']}) – {r['sum']:.2f}".replace(".", ","),
+        lambda r: f"<span style='font-size:18px'><strong>{r['category']}</strong> ({r['count']}) – {format_amount(r['sum'])}</span>",
         axis=1
     )
     
@@ -240,13 +243,15 @@ def main():
     total['sort'] = total['category'].apply(lambda x: 0 if x == 'Przychody' else 1)
     total = total.sort_values(by=['sort', 'category'])
     
-    # Expandery z klikaniem w kategorię (bez dodatkowego opisu)
+    # Expandery
     for _, row in total.iterrows():
         cat = row['category']
-        with st.expander(row['formatted']):
+        with st.expander(label=None):
+            st.markdown(row['formatted'], unsafe_allow_html=True)
             subs = grouped[grouped['category'] == cat]
             for _, r in subs.iterrows():
                 st.markdown(f"- {r['formatted']}")
+
 
 
 
