@@ -6,7 +6,6 @@ from rapidfuzz import process, fuzz
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-import git  # jeśli używasz auto‑push
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -27,7 +26,8 @@ CATEGORIES = {
     'Wakacje': ['Wakacje'],
     'Gotówka': ['Wpłata', 'Wypłata']
 }
-ASSIGNMENTS_FILE = Path("assignments.csv")
+# zapisujemy assignments.csv w katalogu /mnt/data (trwały wolumen)
+ASSIGNMENTS_FILE = Path("/mnt/data/assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
 # --------------------------------------------------
@@ -54,7 +54,6 @@ def clean_desc(s):
 
 class Categorizer:
     def __init__(self):
-        # odczytaj assignments.csv
         self.map = {}
         if ASSIGNMENTS_FILE.exists():
             df = pd.read_csv(ASSIGNMENTS_FILE).drop_duplicates('description', keep='last')
@@ -76,29 +75,15 @@ class Categorizer:
         kc = clean_desc(key)
         if not kc:
             return
-        # aktualizuj mapę i natychmiast zapisuj
         self.map[kc] = (cat, sub)
+        # natychmiast zapisz cały plik
         pd.DataFrame([
             {"description": k, "category": c, "subcategory": s}
             for k,(c,s) in self.map.items()
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------------------
-# 4) AUTO‑PUSH (opcjonalnie)
-# ------------------------------------
-def auto_git_commit():
-    token = st.secrets["GITHUB_TOKEN"]
-    repo_url = f"https://{token}@github.com/{st.secrets['GITHUB_REPO']}.git"
-    repo = git.Repo.clone_from(repo_url, ".", branch="main") if not Path(".git").exists() else git.Repo(".")
-    repo.remotes.origin.set_url(repo_url)
-    repo.index.add([str(ASSIGNMENTS_FILE)])
-    if repo.is_dirty():
-        name,email = st.secrets["GITHUB_AUTHOR"].replace(">","").split(" <")
-        repo.index.commit("Automatyczny zapis assignments.csv", author=git.Actor(name,email))
-        repo.remotes.origin.push()
-
-# ------------------------------------
-# 5) Wczytanie CSV
+# 4) Wczytanie CSV z banku
 # ------------------------------------
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
@@ -113,26 +98,25 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
 # ------------------------------------
-# 6) GŁÓWNA FUNKCJA
+# 5) GŁÓWNA FUNKCJA STREAMLIT
 # ------------------------------------
 def main():
-    st.title("🗂 Kategoryzator + Raporty")
+    st.title("🗂 Kategoryzator transakcji + Raporty")
 
-    # każdorazowo inicjalizujemy nowe Categorizer odczytując plik
+    # załaduj kategoryzator (wczyta najnowszy assignments.csv)
     cat = Categorizer()
 
-    # 6.1) sidebar: wczytanie + filtr
+    # sidebar: wczytaj plik + filtr dat
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
-        st.sidebar.info("Wczytaj plik CSV najpierw."); return
-
+        st.sidebar.info("Wczytaj plik CSV, aby zacząć."); return
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
         st.error(str(e)); return
 
-    # przygotowanie df
+    # przygotowanie DataFrame
     cols = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.copy(); df.columns = cols
     df = df.rename(columns={
@@ -140,30 +124,29 @@ def main():
         'Nr rachunku':'Nr rachunku','Kwota transakcji (waluta rachunku)':'Amount',
         'Kwota blokady/zwolnienie blokady':'Kwota blokady'
     })[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']]
-
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
 
-    # 6.1b) filtr dat
+    # filtr dat
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if mode == "Zakres dat":
-        mind, maxd = df['Date'].min(), df['Date'].max()
-        start, end = st.sidebar.date_input("Zakres dat", [mind, maxd], min_value=mind, max_value=maxd)
+        mn, mx = df['Date'].min(), df['Date'].max()
+        start, end = st.sidebar.date_input("Zakres dat", [mn, mx], min_value=mn, max_value=mx)
         start, end = pd.to_datetime(start), pd.to_datetime(end)
-        df = df[(df['Date'] >= start) & (df['Date'] <= end)]
+        df = df[(df['Date']>=start)&(df['Date']<=end)]
     else:
         yrs = sorted(df['Date'].dt.year.unique())
-        months = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',6:'Czerwiec',
-                  7:'Lipiec',8:'Sierpień',9:'Wrzesień',10:'Październik',11:'Listopad',12:'Grudzień'}
+        months = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',
+                  6:'Czerwiec',7:'Lipiec',8:'Sierpień',9:'Wrzesień',
+                  10:'Październik',11:'Listopad',12:'Grudzień'}
         y = st.sidebar.selectbox("Rok", yrs, index=len(yrs)-1)
         mname = st.sidebar.selectbox("Miesiąc", list(months.values()), index=6)
         m = {v:k for k,v in months.items()}[mname]
-        df = df[(df['Date'].dt.year == y) & (df['Date'].dt.month == m)]
+        df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
-    # 6.2) Bulk‑assign
-    df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description'].astype(str)).map(clean_desc)
+    # krok 1: grupy po kluczu i formularz
+    df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
     groups = df.groupby('key').groups.values()
-
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
     for idxs in groups:
         key = df.loc[idxs[0],'key']
@@ -177,12 +160,12 @@ def main():
         opts = CATEGORIES[sel_cat]
         default = opts.index(sugg[1]) if sugg[1] in opts else 0
         sel_sub = st.selectbox("Podkategoria", opts, index=default, key=f"sub_{key}")
-        cat.assign(key, sel_cat, sel_sub)  # od razu zapis do pliku
+        cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---")
-    st.success("Krok 1: zakończony — przypisania trzymane w assignments.csv.")
+    st.success("Krok 1: zakończony – assignments.csv zaktualizowany.")
 
-    # 6.3) Finalna tabela
+    # krok 2: finalna tabela
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
@@ -201,7 +184,7 @@ def main():
         hide_index=True, use_container_width=True
     )
 
-    # 6.4) Raport z 'edited'
+    # krok 3: raport z edited
     @st.cache_data
     def get_report_tables(df_final):
         grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
@@ -213,7 +196,6 @@ def main():
         return grp, tot
 
     grouped, total = get_report_tables(edited)
-
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
     def fmt(v): return f"{abs(v):,.2f}".replace(",", " ").replace(".", ",")
     for _, r in total.iterrows():
@@ -223,6 +205,11 @@ def main():
                            (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
                 st.markdown(f"- {s['subcategory']} ({s['count']}) – {fmt(s['sum'])}")
+
+    # debug: pokaż assignments.csv
+    if ASSIGNMENTS_FILE.exists():
+        st.sidebar.markdown("### assignments.csv")
+        st.sidebar.dataframe(pd.read_csv(ASSIGNMENTS_FILE), use_container_width=True)
 
 if __name__ == "__main__":
     main()
