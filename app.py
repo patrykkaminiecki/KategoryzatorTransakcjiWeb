@@ -260,11 +260,15 @@ def main():
         total[total['category'] != 'Przychody'].sort_values('category')
     ], ignore_index=True)
 
+    # --- Przygotuj kolumnę kwoty do raportu (Amount lub Kwota blokady) ---
+    final['amount_report'] = final['Amount']
+    mask = (final['Amount'].isna() | (final['Amount'] == 0)) & final['Kwota blokady'].notna()
+    final.loc[mask, 'amount_report'] = final.loc[mask, 'Kwota blokady']
+
     # --- Funkcja raportowa pod cache ---
     @st.cache_data(show_spinner=False)
     def get_report_tables(final):
-        # Agreguj tylko istniejące kategorie/podkategorie z transakcjami
-        grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
+        grouped = final.groupby(['category', 'subcategory'])['amount_report'].agg(['count', 'sum']).reset_index()
         grouped = grouped[grouped['count'] > 0]
         total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
         total = total[total['count'] > 0]
