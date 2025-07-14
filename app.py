@@ -205,17 +205,18 @@ def main():
         return grp, tot
 
     grouped, total = get_report_tables(edited)
+
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
     def fmt(v): return f"{abs(v):,.2f}".replace(",", " ").replace(".", ",")
+    
     for _, r in total.iterrows():
-        # expander z samą nazwą kategorii
-        with st.expander(r['category']):
-            # wewnątrz pokaż pełny, pogrubiony nagłówek z liczbą i sumą
-            st.markdown(f"## **{r['category']} ({r['count']}) – {fmt(r['sum'])}**")
+        # obecnie używasz tylko r['category'] jako label – zmień to:
+        with st.expander(f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"):
             subs = grouped[(grouped['category']==r['category']) &
                            (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
-                st.markdown(f"- {s['subcategory']} ({s['count']}) – {fmt(s['sum'])}")
+                # pogrubiamy tylko kwotę:
+                st.markdown(f"- {s['subcategory']} ({s['count']}) – **{fmt(s['sum'])}**")
 
 if __name__ == "__main__":
     main()
