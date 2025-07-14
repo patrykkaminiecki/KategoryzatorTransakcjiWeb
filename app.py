@@ -6,9 +6,11 @@ from rapidfuzz import process, fuzz
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-import git  # opcjonalnie, jeśli auto‑push
+import git  # jeśli chcesz auto‑push
 
-# 1) Definicja kategorii
+# ------------------------
+# 1) DEFINICJA KATEGORII
+# ------------------------
 CATEGORIES = {
     'Przychody': ['Patryk', 'Jolka', 'Świadczenia', 'Inne'],
     'Rachunki': ['Prąd', 'Gaz', 'Woda', 'Odpady', 'Internet', 'Telefon',
@@ -28,19 +30,24 @@ CATEGORIES = {
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
-# 2) Embeddingi
+# --------------------------------------------------
+# 2) EMBEDDINGI DLA PAR KATEGORIA — PODKATEGORIA
+# --------------------------------------------------
 @st.cache_resource
 def get_embed_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
 
 @st.cache_data
 def get_pair_embs():
-    return get_embed_model().encode(CATEGORY_PAIRS, convert_to_numpy=True)
+    model = get_embed_model()
+    return model.encode(CATEGORY_PAIRS, convert_to_numpy=True)
 
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
-# 3) Categorizer
+# ------------------------------------
+# 3) KLASA CATEGORIZERA
+# ------------------------------------
 def clean_desc(s):
     return str(s).strip().replace("'", "").replace('"', '')
 
@@ -74,7 +81,9 @@ class Categorizer:
             for k,(c,s) in self.map.items()
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
-# 4) Auto‑push (opcjonalnie)
+# ------------------------------------
+# 4) OPCJONALNY AUTO‑PUSH
+# ------------------------------------
 def auto_git_commit():
     token = st.secrets["GITHUB_TOKEN"]
     repo_url = f"https://{token}@github.com/{st.secrets['GITHUB_REPO']}.git"
@@ -86,11 +95,13 @@ def auto_git_commit():
         repo.index.commit("Automatyczny zapis assignments.csv", author=git.Actor(name,email))
         repo.remotes.origin.push()
 
+# ------------------------------------
 # 5) Wczytanie CSV
+# ------------------------------------
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
-    for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
+    for enc,sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             lines = raw.decode(enc, errors='ignore').splitlines()
             idx = next(i for i,l in enumerate(lines) if 'Data' in l and 'Kwota' in l)
@@ -99,23 +110,30 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
             pass
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
-# 6) Główna
+# ------------------------------------
+# 6) GŁÓWNA FUNKCJA
+# ------------------------------------
 def main():
-    st.title("🗂 Kategoryzator + Raporty")
-    cat = Categorizer()
+    st.title("🗂 Kategoryzator transakcji bankowych + Raporty")
 
-    # 6.1) Filtry dat
+    # inicjalizuj categorizer tylko raz
+    if 'cat' not in st.session_state:
+        st.session_state.cat = Categorizer()
+    cat = st.session_state.cat
+
+    # 6.1) sidebar: wczytanie pliku i filtr dat
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
-        st.sidebar.info("Wczytaj najpierw plik.")
+        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć.")
         return
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
-        st.error(str(e)); return
+        st.error(str(e))
+        return
 
-    # Przygotowanie DataFrame
+    # przygotowanie df
     df_raw.columns = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.rename(columns={
         'Data transakcji':'Date','Dane kontrahenta':'Description','Tytuł':'Tytuł',
@@ -126,51 +144,52 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
 
-    # --- POPRAWKA FILTRA: konwertujemy start/end na Timestamps ---
+    # wybór trybu filtrowania
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if mode == "Zakres dat":
         mind, maxd = df['Date'].min(), df['Date'].max()
-        start, end = st.sidebar.date_input("Zakres dat", [mind, maxd], min_value=mind, max_value=maxd)
-        start = pd.to_datetime(start)
-        end   = pd.to_datetime(end)
+        start, end = st.sidebar.date_input("Zakres dat", [mind, maxd],
+                                           min_value=mind, max_value=maxd)
+        start, end = pd.to_datetime(start), pd.to_datetime(end)
         df = df[(df['Date'] >= start) & (df['Date'] <= end)]
     else:
-        years = sorted(df['Date'].dt.year.unique())
+        yrs = sorted(df['Date'].dt.year.unique())
         months = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',6:'Czerwiec',
                   7:'Lipiec',8:'Sierpień',9:'Wrzesień',10:'Październik',11:'Listopad',12:'Grudzień'}
-        y = st.sidebar.selectbox("Rok", years, index=len(years)-1)
+        y = st.sidebar.selectbox("Rok", yrs, index=len(yrs)-1)
         mname = st.sidebar.selectbox("Miesiąc", list(months.values()), index=6)
         m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year == y) & (df['Date'].dt.month == m)]
 
-    # 6.2) Bulk‑assign
-    df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description'].astype(str)).map(clean_desc)
+    # 6.2) Bulk‑assign: klucz, formularze
+    df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' +
+                 df['Description'].astype(str)).map(clean_desc)
     groups = df.groupby('key').groups.values()
-    st.markdown("#### Krok 1: Przypisz kategorie")
+
+    st.markdown("#### Krok 1: Przypisz kategorie grupom")
     for idxs in groups:
         key = df.loc[idxs[0],'key']
+        # jeśli już jest nie-pusta kategoria → pomiń
         if key in cat.map and cat.map[key][0]:
             continue
         amt = df.loc[idxs[0],'Amount']
         st.write(f"**{key}** – {amt:.2f} PLN")
         sugg = cat.suggest(key, amt)
         sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
-                               index=list(CATEGORIES.keys()).index(sugg[0]), key=f"cat_{key}")
-        options = CATEGORIES.get(sel_cat, [])
-        default_idx = options.index(sugg[1]) if sugg[1] in options else 0
-        sel_sub = st.selectbox(
-            "Podkategoria",
-            options,
-            index=default_idx,
-            key=f"sub_{key}"
-        )
+                               index=list(CATEGORIES.keys()).index(sugg[0]),
+                               key=f"cat_{key}")
+        opts = CATEGORIES[sel_cat]
+        default = opts.index(sugg[1]) if sugg[1] in opts else 0
+        sel_sub = st.selectbox("Podkategoria", opts,
+                               index=default, key=f"sub_{key}")
         cat.assign(key, sel_cat, sel_sub)
 
-    st.markdown("---"); st.success("Krok 1: Gotowe!")
+    st.markdown("---")
+    st.success("Krok 1: zakończony!")
 
     # 6.3) Finalna tabela
-    df['category']    = df['key'].map(lambda k: cat.map.get(k, ("",""))[0])
-    df['subcategory'] = df['key'].map(lambda k: cat.map.get(k, ("",""))[1])
+    df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
+    df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited = st.data_editor(final,
@@ -181,20 +200,22 @@ def main():
             'Amount': st.column_config.NumberColumn("Kwota", format="%.2f"),
             'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
-            'subcategory': st.column_config.SelectboxColumn("Podkategoria",
-                             options=[s for subs in CATEGORIES.values() for s in subs])
+            'subcategory': st.column_config.SelectboxColumn(
+                "Podkategoria",
+                options=[s for subs in CATEGORIES.values() for s in subs]
+            )
         },
         hide_index=True, use_container_width=True
     )
 
-    if st.button("💾 Zapisz zmiany"):
-        for row in edited.itertuples(index=False):
-            key = clean_desc(str(row.category) + "|" + str(row.subcategory))
-            cat.assign(key, row.category, row.subcategory)
+    if st.button("💾 Zapisz do assignments.csv"):
         cat.save()
         st.success("Zapisano assignments.csv")
-        try: auto_git_commit(); st.success("Wysłano do GitHuba")
-        except: st.warning("Push nieudany")
+        try:
+            auto_git_commit()
+            st.success("Wysłano do GitHuba")
+        except Exception as e:
+            st.warning(f"Push nieudany: {e}")
 
     # 6.4) Raport z podkategoriami
     @st.cache_data
@@ -215,7 +236,8 @@ def main():
     for _, r in total.iterrows():
         label = f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"
         with st.expander(label):
-            subs = grouped[(grouped['category']==r['category']) & (grouped['subcategory']!=r['category'])]
+            subs = grouped[(grouped['category']==r['category']) &
+                           (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
                 st.markdown(f"- {s['subcategory']} ({s['count']}) – {fmt(s['sum'])}")
 
