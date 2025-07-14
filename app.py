@@ -38,15 +38,15 @@ class Categorizer:
             try:
                 df = pd.read_csv(ASSIGNMENTS_FILE)
                 for _, row in df.iterrows():
-                    desc = row['description']
-                    self.map[desc] = (row['category'], row['subcategory'])
+                    key = row['description']
+                    self.map[key] = (row['category'], row['subcategory'])
             except Exception:
                 st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
 
-    def suggest(self, desc: str):
+    def suggest(self, key: str):
         if not self.map:
             return None
-        best, score, _ = process.extractOne(desc, list(self.map.keys()), scorer=fuzz.token_sort_ratio)
+        best, score, _ = process.extractOne(key, list(self.map.keys()), scorer=fuzz.token_sort_ratio)
         return self.map[best] if score > 80 else None
 
     def assign(self, key: str, cat: str, sub: str):
@@ -54,8 +54,8 @@ class Categorizer:
 
     def save(self):
         df = pd.DataFrame([
-            {"description": key, "category": cat, "subcategory": sub}
-            for key, (cat, sub) in self.map.items()
+            {"description": k, "category": c, "subcategory": s}
+            for k, (c, s) in self.map.items()
         ])
         df.to_csv(ASSIGNMENTS_FILE, index=False)
 
@@ -68,20 +68,17 @@ def auto_git_commit():
     author = st.secrets["GITHUB_AUTHOR"]
     repo_url = f"https://{token}@github.com/{repo_name}.git"
 
-    # Klon lub otwórz repo
     if not Path(".git").exists():
         git.Repo.clone_from(repo_url, ".", branch="main")
         repo = git.Repo(".")
     else:
         repo = git.Repo(".")
 
-    # Nadpisz origin
     if "origin" not in [r.name for r in repo.remotes]:
         repo.create_remote("origin", repo_url)
     else:
         repo.remotes.origin.set_url(repo_url)
 
-    # Dodaj i push
     repo.index.add([str(ASSIGNMENTS_FILE)])
     if repo.is_dirty():
         name, email = author.replace(">", "").split(" <")
@@ -95,11 +92,10 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
     for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
-            text = raw.decode(enc, errors='ignore').splitlines()
-            idx = next(i for i, line in enumerate(text) if 'Data' in line and 'Kwota' in line)
-            data = '\n'.join(text[idx:])
-            df = pd.read_csv(io.StringIO(data), sep=sep, decimal=',')
-            return df
+            lines = raw.decode(enc, errors='ignore').splitlines()
+            idx = next(i for i, line in enumerate(lines) if 'Data' in line and 'Kwota' in line)
+            data = '\n'.join(lines[idx:])
+            return pd.read_csv(io.StringIO(data), sep=sep, decimal=',')
         except Exception:
             continue
     raise ValueError("Nie udało się wczytać pliku CSV.")
@@ -110,22 +106,20 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
 def main():
     st.title("🗂 Kategoryzator transakcji bankowych")
 
-    # 5.1) Inicjuj Categorizer
     cat = Categorizer()
 
-    # 5.2) Upload pliku
     uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
     if not uploaded:
         st.info("Wczytaj plik, żeby rozpocząć.")
         return
 
-    # 5.3) Wczytaj i zmapuj
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
         st.error(str(e))
         return
 
+    # Mapowanie i przycięcie
     df_raw = df_raw.loc[:, df_raw.columns.notna()]
     df_raw.columns = [c.strip() for c in df_raw.columns]
     df_raw.rename(columns={
@@ -140,44 +134,41 @@ def main():
     cols = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']
     df = df_raw[cols].copy()
 
-    # 5.4) Utwórz composite key i grupuj
-    df['_group_key'] = df['Description'].fillna('') + '|' + df['Nr rachunku'].fillna('')
-    keys = df['_group_key'].unique().tolist()
-    to_process = set(keys)
-    groups = []
-    while to_process:
-        k = to_process.pop()
-        matches = [x for x in keys if fuzz.token_sort_ratio(k, x) > 80]
-        for m in matches:
-            to_process.discard(m)
-        groups.append(matches)
+    # 5.4) Grupowanie po numerze rachunku
+    acct_numbers = df['Nr rachunku'].dropna().unique().tolist()
+    groups = [df.index[df['Nr rachunku']==acct].tolist() for acct in acct_numbers if (df['Nr rachunku']==acct).sum()>1]
 
-    # 5.5) Bulk‑assign: dla każdej grupy pytaj o kategorię
-    st.markdown("### Przypisz kategorię do każdej grupy transakcji")
-    for group in groups:
-        if all(g in cat.map for g in group):
+    # 5.5) Bulk‐assign dla każdej grupy
+    st.markdown("### Przypisz kategorię do każdej grupy transakcji (po rachunku)")
+    for idxs in groups:
+        acct = df.loc[idxs[0], 'Nr rachunku']
+        key = str(acct)
+        if key in cat.map:
             continue
-        desc0, acct0 = group[0].split('|')
-        sugg = cat.suggest(group[0]) or ("","")
-        col1, col2 = st.columns([3,2])
-        with col1:
-            st.write(f"**{desc0}** _(rachunek: {acct0 or '—'})_ + {len(group)-1} podobnych")
-        with col2:
-            sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
-                                   index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
-                                   key="cat_"+group[0])
-            sel_sub = st.selectbox("Podkategoria", CATEGORIES[sel_cat],
-                                   index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
-                                   key="sub_"+group[0])
-        for g in group:
-            cat.assign(g, sel_cat, sel_sub)
+
+        descs = df.loc[idxs, 'Description'].unique().tolist()
+        titles = df.loc[idxs, 'Tytuł'].unique().tolist()
+        st.write(f"**Rachunek:** {acct}")
+        st.write(f"- Przykładowe opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
+        st.write(f"- Przykładowe tytuły: {', '.join(titles[:3])}{'...' if len(titles)>3 else ''}")
+
+        sugg = cat.suggest(key) or ("","")
+        sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
+                               index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
+                               key=f"cat_{acct}")
+        sel_sub = st.selectbox("Podkategoria", CATEGORIES[sel_cat],
+                               index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
+                               key=f"sub_{acct}")
+
+        for idx in idxs:
+            cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---")
-    st.success("Grupy oznaczone – możesz skorygować poszczególne transakcje.")
+    st.success("Grupy oznaczone – możesz teraz skorygować pojedyncze transakcje.")
 
-    # 5.6) Przygotuj finalną tabelę (bez Nr rachunku)
-    df['category'] = df['_group_key'].apply(lambda k: cat.map.get(k,('',''))[0])
-    df['subcategory'] = df['_group_key'].apply(lambda k: cat.map.get(k,('',''))[1])
+    # 5.6) Finalna tabela (bez Nr rachunku)
+    df['category'] = df['Nr rachunku'].astype(str).apply(lambda k: cat.map.get(k,('',''))[0])
+    df['subcategory'] = df['Nr rachunku'].astype(str).apply(lambda k: cat.map.get(k,('',''))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited = st.data_editor(
@@ -198,24 +189,20 @@ def main():
 
     # 5.7) Zapis i (opcjonalnie) push
     if st.button("💾 Zapisz i wyeksportuj"):
-        # uaktualnij mapę na podstawie edycji
+        # Aktualizacja mapy z edycji
         for _, row in edited.iterrows():
-            # odtwórz klucz: description|rachunek
-            # pobierz rachunek z df (według Description)
             acct = df.loc[df['Description']==row['Description'], 'Nr rachunku'].iloc[0]
-            key = f"{row['Description']}|{acct}"
+            key = str(acct)
             cat.assign(key, row['category'], row['subcategory'])
         cat.save()
         st.success("Zapisano assignments.csv")
 
-        # opcjonalnie: push do GitHuba
         try:
             auto_git_commit()
             st.success("Wysłano assignments.csv do GitHuba")
         except Exception as e:
             st.warning(f"Push nieudany: {e}")
 
-        # pobierz finalny CSV
         out = edited.to_csv(index=False).encode('utf-8')
         st.download_button("⬇️ Pobierz wynikowy CSV", data=out, file_name="wynik.csv")
 
