@@ -240,7 +240,7 @@ def main():
         alt.value("red")
     )
     
-    base = (
+        base = (
         alt.Chart(chart_df)
            .encode(
                x=alt.X("category:N", sort=order, axis=None),
@@ -252,14 +252,16 @@ def main():
     bars = base.mark_bar()
     
     labels = base.mark_text(
-        dy=-10,  # przesunięcie w górę w obrębie słupka; dostosuj w razie potrzeby
-        color="black"
+        align='center',
+        baseline='middle',
+        dy=0,
+        color="white",
+        fontWeight="bold"
     ).encode(
         text=alt.Text("sum:Q", format=",.2f")
     )
     
     chart = (bars + labels).properties(width="container", height=400)
-    
     st.altair_chart(chart, use_container_width=True)
 
 if __name__ == "__main__":
