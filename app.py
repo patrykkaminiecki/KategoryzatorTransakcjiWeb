@@ -133,34 +133,34 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
     
-    # ✅ Filtrowanie po dacie: wybór trybu
-filter_mode = st.sidebar.radio("Wybierz tryb filtrowania", ["Zakres dat", "Pełny miesiąc"])
-
-# 🔹 Przygotuj dane: konwersja kolumny 'Date' i czyszczenie błędnych
-df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-df = df[df['Date'].notna()]  # tylko poprawne daty
-
-if filter_mode == "Zakres dat":
-    min_d, max_d = df['Date'].min(), df['Date'].max()
-    start, end = st.sidebar.date_input("Zakres dat", [min_d, max_d], min_value=min_d, max_value=max_d)
-    mask = (df['Date'] >= pd.to_datetime(start)) & (df['Date'] <= pd.to_datetime(end))
-    df = df.loc[mask]
-
-elif filter_mode == "Pełny miesiąc":
-    available_years = sorted(df['Date'].dt.year.unique())
-    available_months = {
-        1: 'Styczeń', 2: 'Luty', 3: 'Marzec', 4: 'Kwiecień',
-        5: 'Maj', 6: 'Czerwiec', 7: 'Lipiec', 8: 'Sierpień',
-        9: 'Wrzesień', 10: 'Październik', 11: 'Listopad', 12: 'Grudzień'
-    }
-
-    year_filter = st.sidebar.selectbox("Rok", available_years, index=len(available_years) - 1)
-    month_filter = st.sidebar.selectbox("Miesiąc", list(available_months.values()), index=6)  # domyślnie lipiec
-
-    rev_months = {v: k for k, v in available_months.items()}
-    m = rev_months[month_filter]
-    y = year_filter
-    df = df[(df['Date'].dt.year == y) & (df['Date'].dt.month == m)]
+        # ✅ Filtrowanie po dacie: wybór trybu
+    filter_mode = st.sidebar.radio("Wybierz tryb filtrowania", ["Zakres dat", "Pełny miesiąc"])
+    
+    # 🔹 Przygotuj dane: konwersja kolumny 'Date' i czyszczenie błędnych
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df[df['Date'].notna()]  # tylko poprawne daty
+    
+    if filter_mode == "Zakres dat":
+        min_d, max_d = df['Date'].min(), df['Date'].max()
+        start, end = st.sidebar.date_input("Zakres dat", [min_d, max_d], min_value=min_d, max_value=max_d)
+        mask = (df['Date'] >= pd.to_datetime(start)) & (df['Date'] <= pd.to_datetime(end))
+        df = df.loc[mask]
+    
+    elif filter_mode == "Pełny miesiąc":
+        available_years = sorted(df['Date'].dt.year.unique())
+        available_months = {
+            1: 'Styczeń', 2: 'Luty', 3: 'Marzec', 4: 'Kwiecień',
+            5: 'Maj', 6: 'Czerwiec', 7: 'Lipiec', 8: 'Sierpień',
+            9: 'Wrzesień', 10: 'Październik', 11: 'Listopad', 12: 'Grudzień'
+        }
+    
+        year_filter = st.sidebar.selectbox("Rok", available_years, index=len(available_years) - 1)
+        month_filter = st.sidebar.selectbox("Miesiąc", list(available_months.values()), index=6)  # domyślnie lipiec
+    
+        rev_months = {v: k for k, v in available_months.items()}
+        m = rev_months[month_filter]
+        y = year_filter
+        df = df[(df['Date'].dt.year == y) & (df['Date'].dt.month == m)]
 
 
     # --- 6.2) Bulk‑assign (pozostało bez zmian) ---
