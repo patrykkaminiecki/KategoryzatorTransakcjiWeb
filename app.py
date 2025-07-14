@@ -301,6 +301,24 @@ def main():
     unmapped = [k for k in keys_list if cat.map.get(clean_desc(k), ("", ""))[0] == "" or cat.map.get(clean_desc(k), ("", ""))[1] == ""]
     st.info(f'Nieprzypisane klucze: {[clean_desc(k) for k in unmapped]}' if unmapped else 'Wszystkie transakcje przypisane.')
     show_assign_form = len(unmapped) > 0
+
+    # Poprawne przypisanie kategorii/podkategorii do df po indeksie
+    categories = []
+    subcategories = []
+    for _, r in df.iterrows():
+        nr_rachunku = str(r['Nr rachunku']) if pd.notna(r['Nr rachunku']) else ''
+        kontrahent = str(r.get('Dane kontrahenta', ''))
+        if not nr_rachunku.strip() and not kontrahent.strip():
+            categories.append(None)
+            subcategories.append(None)
+            continue
+        key = clean_desc(nr_rachunku + '|' + kontrahent)
+        cat_pair = cat.map.get(key, (None, None))
+        categories.append(cat_pair[0] if cat_pair[0] else None)
+        subcategories.append(cat_pair[1] if cat_pair[1] else None)
+    df['category'] = categories
+    df['subcategory'] = subcategories
+
     grouped, total = get_report_tables(final)
 
     for _, row in total.iterrows():
