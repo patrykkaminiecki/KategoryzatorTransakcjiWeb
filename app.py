@@ -130,7 +130,7 @@ def main():
     },inplace=True)
     df = df_raw[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']].copy()
     # Konwersja kolumny 'Date' i usunięcie błędnych wierszy
-    df['Date'] = pd.to_datetime(df['Date'], dayfirst=True, errors='coerce')
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
     
     # Filtr dat
@@ -138,6 +138,7 @@ def main():
     start, end = st.sidebar.date_input("Zakres dat", [min_d, max_d], min_value=min_d, max_value=max_d)
     mask = (df['Date'] >= pd.to_datetime(start)) & (df['Date'] <= pd.to_datetime(end))
     df = df.loc[mask]
+
 
 
     # --- 6.2) Bulk‑assign (pozostało bez zmian) ---
