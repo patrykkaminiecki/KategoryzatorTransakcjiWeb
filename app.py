@@ -26,7 +26,6 @@ CATEGORIES = {
     'Wakacje': ['Wakacje'],
     'Gotówka': ['Wpłata', 'Wypłata']
 }
-# teraz relative path w bieżącym katalogu
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
@@ -76,9 +75,9 @@ class Categorizer:
         if not kc:
             return
         self.map[kc] = (cat, sub)
-        # utwórz katalog jeśli potrzeba (na wszelki wypadek)
+        # utwórz katalog jeśli potrzeba
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        # natychmiast zapisujemy
+        # natychmiast zapis do pliku
         pd.DataFrame([
             {"description": k, "category": c, "subcategory": s}
             for k,(c,s) in self.map.items()
@@ -90,7 +89,7 @@ class Categorizer:
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
-    for enc,sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
+    for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             lines = raw.decode(enc, errors='ignore').splitlines()
             idx = next(i for i,l in enumerate(lines) if 'Data' in l and 'Kwota' in l)
@@ -100,13 +99,13 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
 # ------------------------------------
-# 5) GŁÓWNA FUNKCJA STREAMLIT
+# 5) GŁÓWNA FUNKCJA
 # ------------------------------------
 def main():
-    st.title("🗂 Kategoryzator + Raporty")
-    cat = Categorizer()  # zawsze wczytaj najnowsze assignments.csv
+    st.title("🗂 Kategoryzator transakcji + Raporty")
+    cat = Categorizer()  # zawsze wczytujemy najnowsze assignments.csv
 
-    # sidebar: wczytywanie + filtr
+    # 5.1) sidebar: plik + filtr dat
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
@@ -116,7 +115,7 @@ def main():
     except Exception as e:
         st.error(str(e)); return
 
-    # przygotowanie df
+    # przygotowanie DataFrame
     cols = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.copy(); df.columns = cols
     df = df.rename(columns={
@@ -127,7 +126,7 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
 
-    # filtr dat
+    # 5.2) filtr dat
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if mode == "Zakres dat":
         mn, mx = df['Date'].min(), df['Date'].max()
@@ -144,7 +143,7 @@ def main():
         m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
-    # Krok 1: bulk-assign
+    # 5.3) Bulk‑assign
     df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
     groups = df.groupby('key').groups.values()
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
@@ -165,11 +164,12 @@ def main():
     st.markdown("---")
     st.success("Krok 1: zakończony – assignments.csv zaktualizowany.")
 
-    # Finalna tabela
+    # 5.4) Finalna tabela
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
+    # 5.5) Edytowalna tabela
     edited = st.data_editor(final,
         column_config={
             'Date': st.column_config.Column("Data"),
@@ -184,7 +184,16 @@ def main():
         hide_index=True, use_container_width=True
     )
 
-    # Raport z edited
+    # 5.6) Zapis ręcznych zmian
+    if st.button("💾 Zapisz zmiany do assignments.csv"):
+        # klucze w tej samej kolejności
+        keys_list = df['key'].tolist()
+        for idx, row in enumerate(edited.itertuples(index=False)):
+            key = keys_list[idx]
+            cat.assign(key, row.category, row.subcategory)
+        st.success("Zapisano assignments.csv")
+
+    # 5.7) Raport z edited
     @st.cache_data
     def get_report_tables(df_final):
         grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
