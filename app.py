@@ -227,21 +227,16 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-    # --- Przygotowanie danych ---
+    # --- Dane ---
     sub_df = grouped.copy()
-    # suma na poziomie kategorii (total) użyta do etykiet
     total_df = total.copy()
-    # porządek kategorii
     others = sorted([c for c in total_df['category'] if c != 'Przychody'])
     order = ['Przychody'] + others
+    total_df['mid'] = total_df['sum'] / 2
     
-    # --- Wspólny encoding osi x ---
-    x_enc = alt.X('category:N',
-                  sort=order,
-                  axis=None,
-                  title=None)
+    x_enc = alt.X('category:N', sort=order, axis=None, title=None)
     
-    # --- 1) Warstwa: Przychody (zielone odcienie) ---
+    # --- Słupki przychodów ---
     bars_income = (
         alt.Chart(sub_df)
            .transform_filter(alt.datum.category == 'Przychody')
@@ -251,48 +246,38 @@ def main():
                y=alt.Y('sum:Q', stack='zero', axis=None, title=None),
                color=alt.Color('subcategory:N',
                                scale=alt.Scale(scheme='greens'),
-                               legend=alt.Legend(title="Podkategoria")),
+                               legend=alt.Legend(title="Przychody — podkategoria")),
                order=alt.Order('subcategory:N'),
                tooltip=[
-                   alt.Tooltip('category:N', title='Kategoria'),
                    alt.Tooltip('subcategory:N', title='Podkategoria'),
                    alt.Tooltip('sum:Q', title='Suma', format=",.2f")
                ]
            )
     )
     
-    # --- 2) Warstwa: Wydatki (czerwone odcienie) ---
+    # --- Słupki wydatków ---
     bars_expense = (
         alt.Chart(sub_df)
            .transform_filter(alt.datum.category != 'Przychody')
            .mark_bar()
            .encode(
                x=x_enc,
-               y=alt.Y('sum:Q', stack='zero', axis=None),
+               y=alt.Y('sum:Q', stack='zero'),
                color=alt.Color('subcategory:N',
                                scale=alt.Scale(scheme='reds'),
-                               legend=None),
+                               legend=alt.Legend(title="Wydatki — podkategoria")),
                order=alt.Order('subcategory:N'),
                tooltip=[
-                   alt.Tooltip('category:N', title='Kategoria'),
                    alt.Tooltip('subcategory:N', title='Podkategoria'),
                    alt.Tooltip('sum:Q', title='Suma', format=",.2f")
                ]
            )
     )
     
-    # --- 3) Etykiety: całkowita suma wewnątrz każdego słupka ---
-    # dodaj kolumnę mid = 0.5 * total sum
-    total_df['mid'] = total_df['sum'] / 2
-    
+    # --- Etykiety sumy całkowitej wewnątrz ---
     labels = (
         alt.Chart(total_df)
-           .mark_text(
-               align='center',
-               baseline='middle',
-               color='white',
-               fontWeight='bold'
-           )
+           .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
            .encode(
                x=x_enc,
                y=alt.Y('mid:Q', axis=None),
@@ -300,9 +285,12 @@ def main():
            )
     )
     
-    # --- 4) Łączymy warstwy ---
-    chart = alt.layer(bars_income, bars_expense, labels)\
-               .properties(width='container', height=400)
+    # --- Łączenie i rozdzielenie skal kolorów ---
+    chart = (
+        alt.layer(bars_income, bars_expense, labels)
+           .resolve_scale(color='independent')
+           .properties(width='container', height=400)
+    )
     
     st.altair_chart(chart, use_container_width=True)
 
