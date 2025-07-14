@@ -1,13 +1,12 @@
 import pandas as pd
-import io
+import io, re
 import streamlit as st
 from pathlib import Path
 from rapidfuzz import process, fuzz
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
-import git  # opcjonalnie, jeśli auto‑push
-import re
+import git  # jeśli korzystasz z auto‑push
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -49,9 +48,7 @@ PAIR_EMBS = get_pair_embs()
 # 3) CATEGORIZER
 # ------------------------------------
 def clean_desc(s):
-    # usuń ' oraz " i zbędne białe znaki, a potem zredukuj wszystkie spacje do jednej
     text = str(s).replace("'", "").replace('"', "")
-    # zamień dowolny ciąg białych znaków na pojedynczą spację
     text = re.sub(r'\s+', ' ', text)
     return text.strip()
 
@@ -61,8 +58,7 @@ class Categorizer:
         if ASSIGNMENTS_FILE.exists():
             df = pd.read_csv(ASSIGNMENTS_FILE).drop_duplicates('description', keep='last')
             for _, row in df.iterrows():
-                key = clean_desc(row['description'])
-                self.map[key] = (row['category'], row['subcategory'])
+                self.map[clean_desc(row['description'])] = (row['category'], row['subcategory'])
 
     def suggest(self, key: str, amount: float):
         kc = clean_desc(key)
@@ -79,12 +75,11 @@ class Categorizer:
         kc = clean_desc(key)
         if kc:
             self.map[kc] = (cat, sub)
-
-    def save(self):
-        pd.DataFrame([
-            {"description": k, "category": c, "subcategory": s}
-            for k,(c,s) in self.map.items()
-        ]).to_csv(ASSIGNMENTS_FILE, index=False)
+            # natychmiastowy zapis
+            pd.DataFrame([
+                {"description": k, "category": c, "subcategory": s}
+                for k, (c, s) in self.map.items()
+            ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------------------
 # 4) AUTO‑PUSH (opcjonalnie)
@@ -121,27 +116,25 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
 def main():
     st.title("🗂 Kategoryzator + Raporty")
 
-    # inicjalizacja Categorizer w session
+    # categorizer w sesji
     if 'cat' not in st.session_state:
         st.session_state.cat = Categorizer()
     cat = st.session_state.cat
 
-    # 6.1) sidebar: wczytanie + filtr dat
+    # 6.1) wczytanie + filtr
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
-        st.sidebar.info("Wczytaj plik CSV najpierw.")
-        return
+        st.sidebar.info("Wczytaj plik CSV najpierw."); return
+
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
-        st.error(str(e))
-        return
+        st.error(str(e)); return
 
     # przygotowanie df
     cols = [c.strip() for c in df_raw.columns if c is not None]
-    df = df_raw.copy()
-    df.columns = cols
+    df = df_raw.copy(); df.columns = cols
     df = df.rename(columns={
         'Data transakcji':'Date','Dane kontrahenta':'Description','Tytuł':'Tytuł',
         'Nr rachunku':'Nr rachunku','Kwota transakcji (waluta rachunku)':'Amount',
@@ -151,7 +144,6 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
 
-    # 6.1b) filtr dat
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if mode == "Zakres dat":
         mind, maxd = df['Date'].min(), df['Date'].max()
@@ -184,10 +176,11 @@ def main():
         opts = CATEGORIES[sel_cat]
         default = opts.index(sugg[1]) if sugg[1] in opts else 0
         sel_sub = st.selectbox("Podkategoria", opts, index=default, key=f"sub_{key}")
+        # natychmiast zapisujemy
         cat.assign(key, sel_cat, sel_sub)
-        cat.save()  # <— od razu zapisujemy do assignments.csv, by przetrwało odświeżenie
+
     st.markdown("---")
-    st.success("Krok 1: zakończony — przypisania w sesji.")
+    st.success("Krok 1: zakończony — przypisania zachowane.")
 
     # 6.3) Finalna tabela
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
@@ -209,6 +202,7 @@ def main():
     )
 
     if st.button("💾 Zapisz do assignments.csv"):
+        # przy okazji finalny push jeśli chcesz
         cat.save()
         st.success("Zapisano assignments.csv")
         try:
@@ -216,14 +210,13 @@ def main():
         except Exception as e:
             st.warning(f"Push nieudany: {e}")
 
-    # 6.4) Raport — używa 'edited' zamiast 'final' by odzwierciedlać zmiany
+    # 6.4) Raport z 'edited'
     @st.cache_data
     def get_report_tables(df_final):
         grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
         grp = grp[grp['count']>0]
         tot = grp.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
-        tot = pd.concat([tot[tot['category']=='Przychody'],
-                         tot[tot['category']!='Przychody'].sort_values('category')],
+        tot = pd.concat([tot[tot['category']=='Przychody'], tot[tot['category']!='Przychody'].sort_values('category')],
                         ignore_index=True)
         return grp, tot
 
@@ -234,10 +227,14 @@ def main():
     for _, r in total.iterrows():
         label = f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"
         with st.expander(label):
-            subs = grouped[(grouped['category']==r['category']) &
-                           (grouped['subcategory']!=r['category'])]
+            subs = grouped[(grouped['category']==r['category']) & (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
                 st.markdown(f"- {s['subcategory']} ({s['count']}) – {fmt(s['sum'])}")
+
+    # ---- Debug: pokaż zawartość assignments.csv ----
+    if ASSIGNMENTS_FILE.exists():
+        st.sidebar.markdown("**Zawartość assignments.csv**")
+        st.sidebar.dataframe(pd.read_csv(ASSIGNMENTS_FILE), use_container_width=True)
 
 if __name__ == "__main__":
     main()
