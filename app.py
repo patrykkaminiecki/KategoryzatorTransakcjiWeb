@@ -81,7 +81,7 @@ class Categorizer:
         return ('Przychody','Inne') if amount >= 0 else ('Inne', CATEGORIES['Inne'][0])
 
     def assign(self, key: str, cat: str, sub: str):
-        self.map[key] = (cat, sub)
+        self.map[clean_desc(key)] = (cat, sub)
 
     def save(self):
         pd.DataFrame([
@@ -278,7 +278,7 @@ def main():
         ], ignore_index=True)
         return grouped, total
     # Nowa logika: show_assign_form True jeśli są nieprzypisane klucze
-    keys_list = [str(r['Nr rachunku']) if pd.notna(r['Nr rachunku']) else str(r['Description']) for _, r in df.iterrows()]
+    keys_list = [clean_desc(str(r['Nr rachunku'])) if pd.notna(r['Nr rachunku']) else clean_desc(str(r['Description'])) for _, r in df.iterrows()]
     unmapped = [k for k in keys_list if cat.map.get(k, ("", ""))[0] == "" or cat.map.get(k, ("", ""))[1] == ""]
     st.info(f'Nieprzypisane klucze: {unmapped}' if unmapped else 'Wszystkie transakcje przypisane.')
     show_assign_form = len(unmapped) > 0
