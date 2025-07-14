@@ -30,28 +30,23 @@ CATEGORIES = {
 ASSIGNMENTS_FILE = Path("assignments.csv")
 
 # --------------------------------------------------
-# 2) PRZYGOTUJ EMBEDDINGI DLA PAR KATEGORIA — PODKATEGORIA
+# 2) EMBEDDINGI DLA PAR KATEGORIA — PODKATEGORIA
 # --------------------------------------------------
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
 @st.cache_resource(show_spinner=False)
 def get_embed_model():
-    try:
-        return SentenceTransformer('all-MiniLM-L6-v2')
-    except Exception as e:
-        st.error('Nie udało się pobrać modelu embeddingów (np. limit pobrań HuggingFace, błąd HTTP 429).\nSpróbuj później lub pobierz model ręcznie.\nSzczegóły: ' + str(e))
-        raise
+    return SentenceTransformer('all-MiniLM-L6-v2')
 
 @st.cache_data(show_spinner=False)
 def get_pair_embs():
-    model = get_embed_model()
-    return model.encode(CATEGORY_PAIRS, convert_to_numpy=True)
+    return get_embed_model().encode(CATEGORY_PAIRS, convert_to_numpy=True)
 
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
 # ------------------------------------
-# 3) KLASA DO ZARZĄDZANIA PRZYPISANIAMI
+# 3) KLASA CATEGORIZER
 # ------------------------------------
 def clean_desc(s):
     return str(s).strip().replace("'", "").replace('"', '')
@@ -60,51 +55,40 @@ class Categorizer:
     def __init__(self):
         self.map = {}
         if ASSIGNMENTS_FILE.exists():
-            try:
-                df = pd.read_csv(ASSIGNMENTS_FILE)
-                # Usuwaj duplikaty, zostaw tylko ostatnie wystąpienie
-                df = df.drop_duplicates('description', keep='last')
-                for _, row in df.iterrows():
-                    desc = clean_desc(row['description'])
-                    self.map[desc] = (row['category'], row['subcategory'])
-            except Exception:
-                st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
+            df = pd.read_csv(ASSIGNMENTS_FILE).drop_duplicates('description', keep='last')
+            for _, row in df.iterrows():
+                self.map[clean_desc(row['description'])] = (row['category'], row['subcategory'])
 
     def suggest(self, key: str, amount: float):
-        key_clean = clean_desc(key)
-        if key_clean in self.map and self.map[key_clean][0]:
-            return self.map[key_clean]
+        kc = clean_desc(key)
+        if kc in self.map and self.map[kc][0]:
+            return self.map[kc]
         emb = EMBED_MODEL.encode([key], convert_to_numpy=True)
         sims = cosine_similarity(emb, PAIR_EMBS)[0]
-        best_idx = int(np.argmax(sims)); best_score = sims[best_idx]
-        if best_score > 0.5:
-            cat, sub = CATEGORY_PAIRS[best_idx].split(" — ")
-            return (cat, sub)
+        idx, score = int(np.argmax(sims)), sims.max()
+        if score > 0.5:
+            return tuple(CATEGORY_PAIRS[idx].split(" — "))
         return ('Przychody','Inne') if amount >= 0 else ('Inne', CATEGORIES['Inne'][0])
 
     def assign(self, key: str, cat: str, sub: str):
-        key_clean = clean_desc(key)
-        if not key_clean.strip():
-            return
-        self.map[key_clean] = (cat, sub)
+        kc = clean_desc(key)
+        if kc:
+            self.map[kc] = (cat, sub)
 
     def save(self):
         pd.DataFrame([
             {"description": k, "category": c, "subcategory": s}
-            for k,(c,s) in self.map.items() if k
+            for k,(c,s) in self.map.items()
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------------------
-# 4) OPCJONALNIE: AUTO‑PUSH DO GITHUB
+# 4) AUTO‑PUSH (opcjonalnie)
 # ------------------------------------
 def auto_git_commit():
     token = st.secrets["GITHUB_TOKEN"]
-    repo_name = st.secrets["GITHUB_REPO"]
-    repo_url = f"https://{token}@github.com/{repo_name}.git"
-    if not Path(".git").exists():
-        git.Repo.clone_from(repo_url, ".", branch="main")
-    repo = git.Repo(".")
-    repo.remotes.origin.set_url(repo_url)
+    repo = git.Repo.clone_from(f"https://{token}@github.com/{st.secrets['GITHUB_REPO']}.git", ".", branch="main") \
+        if not Path(".git").exists() else git.Repo(".")
+    repo.remotes.origin.set_url(f"https://{token}@github.com/{st.secrets['GITHUB_REPO']}.git")
     repo.index.add([str(ASSIGNMENTS_FILE)])
     if repo.is_dirty():
         name,email = st.secrets["GITHUB_AUTHOR"].replace(">","").split(" <")
@@ -112,29 +96,28 @@ def auto_git_commit():
         repo.remotes.origin.push()
 
 # ------------------------------------
-# 5) FUNKCJA WCZYTANIA CSV Z BANKU
+# 5) Wczytanie CSV
 # ------------------------------------
 @st.cache_data(show_spinner=False)
-def load_bank_csv(uploaded)->pd.DataFrame:
-    raw=uploaded.getvalue()
+def load_bank_csv(uploaded) -> pd.DataFrame:
+    raw = uploaded.getvalue()
     for enc,sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
-            lines=raw.decode(enc,errors='ignore').splitlines()
-            idx=next(i for i,l in enumerate(lines) if 'Data' in l and 'Kwota' in l)
-            return pd.read_csv(io.StringIO("\n".join(lines[idx:])),sep=sep,decimal=',')
+            lines = raw.decode(enc, errors='ignore').splitlines()
+            idx = next(i for i,l in enumerate(lines) if 'Data' in l and 'Kwota' in l)
+            return pd.read_csv(io.StringIO("\n".join(lines[idx:])), sep=sep, decimal=',')
         except:
             pass
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
-# --------------------------
+# ------------------------------------
 # 6) GŁÓWNA FUNKCJA STREAMLIT
-# --------------------------
+# ------------------------------------
 def main():
     st.title("🗂 Kategoryzator transakcji bankowych + Raporty")
-
     cat = Categorizer()
 
-    # --- 6.1) Filtry dat w sidebarze ---
+    # --- 6.1) Filtry dat ---
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type=["csv"])
     if not uploaded:
@@ -146,198 +129,110 @@ def main():
     except Exception as e:
         st.error(str(e)); return
 
-    df_raw = df_raw.loc[:,df_raw.columns.notna()]
-    df_raw.columns=[c.strip() for c in df_raw.columns]
+    df_raw = df_raw.loc[:, df_raw.columns.notna()]
+    df_raw.columns = [c.strip() for c in df_raw.columns]
     df_raw.rename(columns={
         'Data transakcji':'Date','Dane kontrahenta':'Description','Tytuł':'Tytuł',
         'Nr rachunku':'Nr rachunku','Kwota transakcji (waluta rachunku)':'Amount',
         'Kwota blokady/zwolnienie blokady':'Kwota blokady'
-    },inplace=True)
+    }, inplace=True)
     df = df_raw[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']].copy()
-    # Konwersja kolumny 'Date' i usunięcie błędnych wierszy
+
+    # Konwersja i czyszczenie dat
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
-    
-        # ✅ Filtrowanie po dacie: wybór trybu
-    filter_mode = st.sidebar.radio("Wybierz tryb filtrowania", ["Zakres dat", "Pełny miesiąc"])
-    
-    # 🔹 Przygotuj dane: konwersja kolumny 'Date' i czyszczenie błędnych
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df[df['Date'].notna()]  # tylko poprawne daty
-    
+
+    # Tryb filtra
+    filter_mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if filter_mode == "Zakres dat":
         min_d, max_d = df['Date'].min(), df['Date'].max()
-        start, end = st.sidebar.date_input("Zakres dat", [min_d, max_d], min_value=min_d, max_value=max_d)
-        mask = (df['Date'] >= pd.to_datetime(start)) & (df['Date'] <= pd.to_datetime(end))
-        df = df.loc[mask]
-    
-    elif filter_mode == "Pełny miesiąc":
-        available_years = sorted(df['Date'].dt.year.unique())
-        available_months = {
-            1: 'Styczeń', 2: 'Luty', 3: 'Marzec', 4: 'Kwiecień',
-            5: 'Maj', 6: 'Czerwiec', 7: 'Lipiec', 8: 'Sierpień',
-            9: 'Wrzesień', 10: 'Październik', 11: 'Listopad', 12: 'Grudzień'
-        }
-    
-        year_filter = st.sidebar.selectbox("Rok", available_years, index=len(available_years) - 1)
-        month_filter = st.sidebar.selectbox("Miesiąc", list(available_months.values()), index=6)  # domyślnie lipiec
-    
-        rev_months = {v: k for k, v in available_months.items()}
-        m = rev_months[month_filter]
-        y = year_filter
-        df = df[(df['Date'].dt.year == y) & (df['Date'].dt.month == m)]
+        start, end = st.sidebar.date_input("Zakres dat", [min_d,max_d], min_value=min_d, max_value=max_d)
+        df = df[(df['Date']>=start)&(df['Date']<=end)]
+    else:
+        yrs = sorted(df['Date'].dt.year.unique())
+        months = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',6:'Czerwiec',
+                  7:'Lipiec',8:'Sierpień',9:'Wrzesień',10:'Październik',11:'Listopad',12:'Grudzień'}
+        y = st.sidebar.selectbox("Rok", yrs, index=len(yrs)-1)
+        m = {v:k for k,v in months.items()}[st.sidebar.selectbox("Miesiąc", list(months.values()), index=6)]
+        df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
+    # --- 6.2) Bulk‑assign ---
+    acct = df['Nr rachunku'].astype(str).fillna('')
+    desc = df['Description'].astype(str)
+    keys = acct + "|" + desc
+    df['key'] = keys.map(clean_desc)
 
-    # --- 6.2) Bulk‑assign (pozostało bez zmian) ---
-    acct_nums = df['Nr rachunku'].dropna().unique().tolist()
-    acct_groups = [df.index[df['Nr rachunku']==a].tolist() for a in acct_nums]
-    no_acct = df.index[df['Nr rachunku'].isna()].tolist()
-    desc_groups = [[i] for i in no_acct]
-    groups = acct_groups+desc_groups
-
+    groups = df.groupby('key').groups.values()
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
-    for i_group, idxs in enumerate(groups):
-        first=idxs[0]
-        nr_rachunku = str(df.loc[first, 'Nr rachunku']) if pd.notna(df.loc[first, 'Nr rachunku']) else ''
-        kontrahent = str(df.loc[first].get('Dane kontrahenta', ''))
-        if not nr_rachunku.strip() and not kontrahent.strip():
-            continue  # pomiń puste
-        key = clean_desc(nr_rachunku + '|' + kontrahent)
-        descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; kontrs=[str(x) for x in df.loc[idxs,'Dane kontrahenta'].unique()] if 'Dane kontrahenta' in df.columns else []
-        amt=df.loc[first,'Amount']
-        st.write(f"**{nr_rachunku} | {kontrahent}** – {amt:.2f}\xa0PLN")
-        st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
-        if kontrs:
-            st.write(f"- Kontrahenci: {', '.join(kontrs[:3])}{'...' if len(kontrs)>3 else ''}")
-        sugg=cat.suggest(key,amt) or ("","")
-        sel_cat=st.selectbox("Kategoria", list(CATEGORIES.keys()),
-                             index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
-                             key=f"cat_{key}_{i_group}")
-        sel_sub=st.selectbox("Podkategoria", CATEGORIES[sel_cat],
-                             index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
-                             key=f"sub_{key}_{i_group}")
-        # Zawsze przypisuj (nawet jeśli już istnieje wpis, by nadpisać puste)
-        for i in idxs:
-            if cat.map.get(clean_desc(key), (None, None)) != (sel_cat, sel_sub):
-                cat.assign(key, sel_cat, sel_sub)
+    for idxs in groups:
+        key = df.loc[idxs[0],'key']
+        if key in cat.map and cat.map[key][0]:
+            continue
+        sample_amt = df.loc[idxs[0],'Amount']
+        sample_desc = df.loc[idxs,'Description'].unique()[:3]
+        st.write(f"**{key}** – {sample_amt:.2f} PLN")
+        sugg = cat.suggest(key, sample_amt) or ("","")
+        sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
+                               index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
+                               key=f"cat_{key}")
+        sel_sub = st.selectbox("Podkategoria", CATEGORIES[sel_cat],
+                               index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
+                               key=f"sub_{key}")
+        cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---")
-    st.success("Krok 1 zakończony: grupy mają kategorie.")
+    st.success("Grupy mają kategorie.")
 
     # --- 6.3) Finalna tabela ---
-    keys_list=[str(r['Nr rachunku']) if pd.notna(r['Nr rachunku']) else str(r['Description'])
-               for _,r in df.iterrows()]
-    df['category']=[cat.map.get(clean_desc(k),("", ""))[0] for k in keys_list]
-    df['subcategory']=[cat.map.get(clean_desc(k),("", ""))[1] for k in keys_list]
-    final=df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
+    df['category'] = df['key'].map(lambda k: cat.map.get(k, ("",""))[0])
+    df['subcategory'] = df['key'].map(lambda k: cat.map.get(k, ("",""))[1])
+    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
-    edited=st.data_editor(final,
+    edited = st.data_editor(final,
         column_config={
-            'Date':st.column_config.Column("Data"),
-            'Description':st.column_config.Column("Opis"),
-            'Tytuł':st.column_config.Column("Tytuł"),
-            'Amount':st.column_config.NumberColumn("Kwota",format="%.2f"),
-            'Kwota blokady':st.column_config.NumberColumn("Blokada",format="%.2f"),
-            'category':st.column_config.SelectboxColumn("Kategoria",options=list(CATEGORIES.keys())),
-            'subcategory':st.column_config.SelectboxColumn("Podkategoria",
-                options=[s for subs in CATEGORIES.values() for s in subs])
+            'Date': st.column_config.Column("Data"),
+            'Description': st.column_config.Column("Opis"),
+            'Tytuł': st.column_config.Column("Tytuł"),
+            'Amount': st.column_config.NumberColumn("Kwota", format="%.2f"),
+            'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
+            'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
+            'subcategory': st.column_config.SelectboxColumn("Podkategoria",
+                             options=[s for subs in CATEGORIES.values() for s in subs])
         },
-        hide_index=True,use_container_width=True
+        hide_index=True, use_container_width=True
     )
 
     if st.button("💾 Zapisz zmiany"):
-        for idx,row in enumerate(edited.itertuples(index=False)):
-            key=keys_list[idx]; cat.assign(key,row.category,row.subcategory)
-        cat.save(); st.success("Zapisano assignments.csv")
+        for row in edited.itertuples(index=False):
+            key = clean_desc(str(row.category) + "|" + str(row.subcategory))  # nie nadpisujemy klucza
+            cat.assign(key, row.category, row.subcategory)
+        cat.save()
+        st.success("Zapisano assignments.csv")
         try: auto_git_commit(); st.success("Wysłano do GitHuba")
         except: st.warning("Push nieudany")
 
-# --- 6.4) Raport z podkategoriami ---
-    st.markdown("## 📊 Raport: ilość i suma według kategorii")
-
-    def format_amount(val):
-        return f"{abs(val):,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
-
-    grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
-
-    # Usuń podkategorie bez transakcji
-    grouped = grouped[grouped['count'] > 0]
-
-    # Agregacja sum i liczby dla kategorii: NIE filtruj po count>0, bo mogą być transakcje bez podkategorii!
-    total = final.groupby('category')['Amount'].agg(['count', 'sum']).reset_index()
-    # NIE filtruj total po count>0
-
-    # Sortowanie: Przychody na górze, reszta A-Z
-    total = pd.concat([
-        total[total['category'] == 'Przychody'],
-        total[total['category'] != 'Przychody'].sort_values('category')
-    ], ignore_index=True)
-
-    # --- Przygotuj kolumnę kwoty do raportu (Amount lub Kwota blokady) ---
-    final['amount_report'] = final['Amount']
-    mask = (final['Amount'].isna() | (final['Amount'] == 0)) & final['Kwota blokady'].notna()
-    final.loc[mask, 'amount_report'] = final.loc[mask, 'Kwota blokady']
-
-    # --- Funkcja raportowa pod cache ---
+    # --- 6.4) Raport z podkategoriami ---
     @st.cache_data(show_spinner=False)
-    def get_report_tables(final):
-        grouped = final.groupby(['category', 'subcategory'])['amount_report'].agg(['count', 'sum']).reset_index()
-        grouped = grouped[grouped['count'] > 0]
-        total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
-        total = total[total['count'] > 0]
-        total = pd.concat([
-            total[total['category'] == 'Przychody'],
-            total[total['category'] != 'Przychody'].sort_values('category')
+    def get_report_tables(df_final):
+        grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
+        grp = grp[grp['count']>0]
+        tot = grp.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
+        tot = pd.concat([
+            tot[tot['category']=='Przychody'],
+            tot[tot['category']!='Przychody'].sort_values('category')
         ], ignore_index=True)
-        return grouped, total
-    # Nowa logika: show_assign_form True jeśli są nieprzypisane klucze
-    keys_list = []
-    for _, r in df.iterrows():
-        nr_rachunku = str(r['Nr rachunku']) if pd.notna(r['Nr rachunku']) else ''
-        kontrahent = str(r.get('Dane kontrahenta', ''))
-        if not nr_rachunku.strip() and not kontrahent.strip():
-            continue
-        keys_list.append(clean_desc(nr_rachunku + '|' + kontrahent))
-    unmapped = [k for k in keys_list if cat.map.get(clean_desc(k), ("", ""))[0] == "" or cat.map.get(clean_desc(k), ("", ""))[1] == ""]
-    st.info(f'Nieprzypisane klucze: {[clean_desc(k) for k in unmapped]}' if unmapped else 'Wszystkie transakcje przypisane.')
-    show_assign_form = len(unmapped) > 0
-
-    # Poprawne przypisanie kategorii/podkategorii do df po indeksie
-    categories = []
-    subcategories = []
-    for _, r in df.iterrows():
-        nr_rachunku = str(r['Nr rachunku']) if pd.notna(r['Nr rachunku']) else ''
-        kontrahent = str(r.get('Dane kontrahenta', ''))
-        if not nr_rachunku.strip() and not kontrahent.strip():
-            categories.append(None)
-            subcategories.append(None)
-            continue
-        key = clean_desc(nr_rachunku + '|' + kontrahent)
-        cat_pair = cat.map.get(key, (None, None))
-        categories.append(cat_pair[0] if cat_pair[0] else None)
-        subcategories.append(cat_pair[1] if cat_pair[1] else None)
-    df['category'] = categories
-    df['subcategory'] = subcategories
+        return grp, tot
 
     grouped, total = get_report_tables(final)
 
-    for _, row in total.iterrows():
-        cat = row['category']
-        sum_text = format_amount(row['sum'])
-        label = f"{cat} ({row['count']}) – {sum_text}"
-        subs = grouped[grouped['category'] == cat].copy()
-        # Zamień NaN/puste podkategorie na 'brak podkategorii'
-        subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
-        if not subs.empty:
-            with st.expander(label, expanded=False):
-                for _, sub in subs.iterrows():
-                    sublabel = f"{sub['subcategory']} ({sub['count']}) – {format_amount(sub['sum'])}"
-                    if sub['count'] == 0:
-                        st.markdown(f"<span style='color:gray;font-style:italic'>• {sublabel}</span>", unsafe_allow_html=True)
-                    else:
-                        st.markdown(f"• {sublabel}")
-        else:
-            st.markdown(f"**{label}**")
+    st.markdown("## 📊 Raport: ilość i suma według kategorii")
+    def fmt(v): return f"{abs(v):,.2f}".replace(",", " ").replace(".", ",")
+    for _, r in total.iterrows():
+        label = f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"
+        with st.expander(label):
+            subs = grouped[(grouped['category']==r['category'])&(grouped['subcategory']!=r['category'])]
+            for _, s in subs.iterrows():
+                st.markdown(f"- {s['subcategory']} ({s['count']}) – {fmt(s['sum'])}")
 
 if __name__=="__main__":
     main()
