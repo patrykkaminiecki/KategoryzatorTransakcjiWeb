@@ -227,51 +227,29 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-  # … po wcześniejszym wyciągnięciu `total` …
-
-    # Przygotuj DF
-    chart_df = total.copy()
+      # Przygotuj dane dla podkategorii
+    sub_df = grouped.copy()
+    # Dodaj kolumnę z kolorem całego słupka
+    sub_df['bar_color'] = np.where(sub_df['category'] == 'Przychody', 'green', 'red')
     
-    # Ustal kolejność kategorii: Przychody na początku, reszta A–Z
-    others = sorted([c for c in chart_df['category'] if c != 'Przychody'])
+    # Kolejność kategorii
+    others = sorted([c for c in total['category'] if c != 'Przychody'])
     order = ['Przychody'] + others
     
-    # Dodajemy kolumnę mid = połowa wartości sumy, do pozycjonowania etykiet
-    chart_df['mid'] = chart_df['sum'] / 2
-    
-    # Warstwa słupków, kolor według znaku sumy (>=0 zielony, <0 czerwony)
-    bars = (
-        alt.Chart(chart_df)
+    chart = (
+        alt.Chart(sub_df)
            .mark_bar()
            .encode(
-               x=alt.X("category:N", sort=order, axis=None),
-               y=alt.Y("sum:Q", axis=None),
-               color=alt.condition(
-                   alt.datum.sum >= 0,
-                   alt.value("green"),
-                   alt.value("red")
-               )
+               x=alt.X('category:N', sort=order, axis=None, title=None),
+               y=alt.Y('sum:Q', axis=None, title=None, stack='zero'),
+               color=alt.Color('bar_color:N', scale=None, legend=None),
+               order=alt.Order('subcategory:N'),            # definiuje kolejność segmentów
+               tooltip=[
+                   alt.Tooltip('category:N', title='Kategoria'),
+                   alt.Tooltip('subcategory:N', title='Podkategoria'),
+                   alt.Tooltip('sum:Q', title='Suma', format=",.2f")
+               ]
            )
-    )
-    
-    # Warstwa etykiet: białe, pogrubione, wyśrodkowane wewnątrz słupka
-    labels = (
-        alt.Chart(chart_df)
-           .mark_text(
-               align='center',
-               baseline='middle',
-               color='white',
-               fontWeight='bold'
-           )
-           .encode(
-               x=alt.X("category:N", sort=order),
-               y=alt.Y("mid:Q", axis=None),
-               text=alt.Text("sum:Q", format=",.2f")
-           )
-    )
-    
-    chart = (
-        alt.layer(bars, labels)
            .properties(width='container', height=400)
     )
     
