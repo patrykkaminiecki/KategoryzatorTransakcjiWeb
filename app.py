@@ -247,11 +247,14 @@ for _, row in total.iterrows():
     cat = row['category']
     sum_text = format_amount(row['sum'])
     label = f"{cat} ({row['count']}) – {sum_text}"
-    with st.expander(styled_category(label), expanded=False):
-        subs = grouped[(grouped['category'] == cat) & (grouped['subcategory'] != cat)]
-        for _, sub in subs.iterrows():
-            sublabel = f"{sub['subcategory']} ({sub['count']}) – {format_amount(sub['sum'])}"
-            st.markdown(f"- {sublabel}")
+    subs = grouped[(grouped['category'] == cat) & (grouped['subcategory'] != cat)]
+    if not subs.empty:
+        with st.expander(styled_category(label), expanded=False):
+            for _, sub in subs.iterrows():
+                sublabel = f"{sub['subcategory']} ({sub['count']}) – {format_amount(sub['sum'])}"
+                st.markdown(f"• {sublabel}")
+    else:
+        st.markdown(styled_category(label), unsafe_allow_html=True)
 
 if __name__=="__main__":
     main()
