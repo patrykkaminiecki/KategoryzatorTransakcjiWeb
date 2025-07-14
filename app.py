@@ -29,9 +29,9 @@ CATEGORIES = {
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
-# --------------------------------------------------
+# -------------------------
 # 2) EMBEDDINGI
-# --------------------------------------------------
+# -------------------------
 @st.cache_resource
 def get_embed_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -43,9 +43,9 @@ def get_pair_embs():
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
-# ------------------------------------
-# 3) CATEGORIZER
-# ------------------------------------
+# -------------------------
+# 3) KATEGORIZER
+# -------------------------
 def clean_desc(s):
     text = str(s).replace("'", "").replace('"', "")
     text = re.sub(r'\s+', ' ', text)
@@ -81,9 +81,9 @@ class Categorizer:
             for k,(c,s) in self.map.items()
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
-# ------------------------------------
-# 4) Wczytanie CSV z banku
-# ------------------------------------
+# -------------------------
+# 4) Wczytywanie pliku
+# -------------------------
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
@@ -96,14 +96,13 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
             pass
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
-# ------------------------------------
-# 5) GŁÓWNA FUNKCJA
-# ------------------------------------
+# -------------------------
+# 5) Aplikacja główna
+# -------------------------
 def main():
     st.title("🗂 Kategoryzator transakcji + Raporty")
     cat = Categorizer()
 
-    # 5.1) sidebar: plik + filtr dat
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
@@ -123,7 +122,6 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
 
-    # 5.2) filtr dat
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if mode == "Zakres dat":
         mn, mx = df['Date'].min(), df['Date'].max()
@@ -140,7 +138,6 @@ def main():
         m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
-    # 5.3) Grupowanie i przypisywanie
     df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
     groups = df.groupby('key').groups.values()
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
@@ -161,8 +158,7 @@ def main():
     st.markdown("---")
     st.success("Krok 1: zakończony – assignments.csv zaktualizowany.")
 
-    # 5.4) tabela + edycja
-    df['category'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
+    df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
@@ -199,7 +195,6 @@ def main():
 
     grouped, total = get_report_tables(edited)
 
-    # 5.8) Raport
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
 
     def fmt(val):
@@ -210,17 +205,17 @@ def main():
         count = row['count']
         total_sum = fmt(row['sum'])
 
-        expander_label = f"<span style='font-size:18px'><strong>{cat}</strong></span> ({count}) – {total_sum}"
-
-        subs = grouped[grouped['category'] == cat].copy()
-        subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
-
+        expander_label = f"{cat} ({count}) – {total_sum}"
         with st.expander(expander_label, expanded=False):
+            st.markdown(f"<h4><strong>{cat}</strong> ({count}) – {total_sum}</h4>", unsafe_allow_html=True)
+
+            subs = grouped[grouped['category'] == cat].copy()
+            subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
+
             for _, sub in subs.iterrows():
                 sub_cat = sub['subcategory']
                 sub_count = sub['count']
                 sub_sum = fmt(sub['sum'])
-
                 st.markdown(
                     f"<span style='font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</span>",
                     unsafe_allow_html=True
