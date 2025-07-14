@@ -81,7 +81,10 @@ class Categorizer:
         return ('Przychody','Inne') if amount >= 0 else ('Inne', CATEGORIES['Inne'][0])
 
     def assign(self, key: str, cat: str, sub: str):
-        self.map[clean_desc(key)] = (cat, sub)
+        key_clean = clean_desc(key)
+        if not key_clean.strip():
+            return
+        self.map[key_clean] = (cat, sub)
 
     def save(self):
         pd.DataFrame([
@@ -194,7 +197,6 @@ def main():
     for i_group, idxs in enumerate(groups):
         first=idxs[0]
         acct=df.loc[first,'Nr rachunku']; key=str(acct) if pd.notna(acct) else str(df.loc[first,'Description'])
-        if key in cat.map and cat.map[key][0]: continue
         descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; titles=[str(x) for x in df.loc[idxs,'Tytuł'].unique()]
         amt=df.loc[first,'Amount']
         st.write(f"**{key}** – {amt:.2f}\xa0PLN")
@@ -206,7 +208,10 @@ def main():
         sel_sub=st.selectbox("Podkategoria", CATEGORIES[sel_cat],
                              index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
                              key=f"sub_{key}_{i_group}")
-        for i in idxs: cat.assign(key,sel_cat,sel_sub)
+        # Zawsze przypisuj (nawet jeśli już istnieje wpis, by nadpisać puste)
+        for i in idxs:
+            if cat.map.get(clean_desc(key), (None, None)) != (sel_cat, sel_sub):
+                cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---")
     st.success("Krok 1 zakończony: grupy mają kategorie.")
@@ -214,8 +219,8 @@ def main():
     # --- 6.3) Finalna tabela ---
     keys_list=[str(r['Nr rachunku']) if pd.notna(r['Nr rachunku']) else str(r['Description'])
                for _,r in df.iterrows()]
-    df['category']=[cat.map.get(k,("", ""))[0] for k in keys_list]
-    df['subcategory']=[cat.map.get(k,("", ""))[1] for k in keys_list]
+    df['category']=[cat.map.get(clean_desc(k),("", ""))[0] for k in keys_list]
+    df['subcategory']=[cat.map.get(clean_desc(k),("", ""))[1] for k in keys_list]
     final=df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited=st.data_editor(final,
