@@ -75,9 +75,7 @@ class Categorizer:
         if not kc:
             return
         self.map[kc] = (cat, sub)
-        # utwórz katalog jeśli potrzeba
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        # natychmiast zapis do pliku
         pd.DataFrame([
             {"description": k, "category": c, "subcategory": s}
             for k,(c,s) in self.map.items()
@@ -103,7 +101,7 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
 # ------------------------------------
 def main():
     st.title("🗂 Kategoryzator transakcji + Raporty")
-    cat = Categorizer()  # zawsze wczytujemy najnowsze assignments.csv
+    cat = Categorizer()
 
     # 5.1) sidebar: plik + filtr dat
     st.sidebar.header("Filtr dat")
@@ -115,7 +113,6 @@ def main():
     except Exception as e:
         st.error(str(e)); return
 
-    # przygotowanie DataFrame
     cols = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.copy(); df.columns = cols
     df = df.rename(columns={
@@ -143,7 +140,7 @@ def main():
         m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
-    # 5.3) Bulk‑assign
+    # 5.3) Grupowanie i przypisywanie
     df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
     groups = df.groupby('key').groups.values()
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
@@ -164,12 +161,11 @@ def main():
     st.markdown("---")
     st.success("Krok 1: zakończony – assignments.csv zaktualizowany.")
 
-    # 5.4) Finalna tabela
-    df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
+    # 5.4) tabela + edycja
+    df['category'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
-    # 5.5) Edytowalna tabela
     edited = st.data_editor(final,
         column_config={
             'Date': st.column_config.Column("Data"),
@@ -184,16 +180,13 @@ def main():
         hide_index=True, use_container_width=True
     )
 
-    # 5.6) Zapis ręcznych zmian
     if st.button("💾 Zapisz zmiany do assignments.csv"):
-        # klucze w tej samej kolejności
         keys_list = df['key'].tolist()
         for idx, row in enumerate(edited.itertuples(index=False)):
             key = keys_list[idx]
             cat.assign(key, row.category, row.subcategory)
         st.success("Zapisano assignments.csv")
 
-    # 5.7) Raport z edited
     @st.cache_data
     def get_report_tables(df_final):
         grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
@@ -206,29 +199,28 @@ def main():
 
     grouped, total = get_report_tables(edited)
 
-   st.markdown("## 📊 Raport: ilość i suma wg kategorii")
+    # 5.8) Raport
+    st.markdown("## 📊 Raport: ilość i suma wg kategorii")
 
     def fmt(val):
         return f"{abs(val):,.2f}".replace(",", " ").replace(".", ",")
-    
+
     for _, row in total.iterrows():
         cat = row['category']
         count = row['count']
         total_sum = fmt(row['sum'])
-    
-        # 🔸 Nagłówek kategorii: nazwa większa i pogrubiona, reszta normalnie
+
         expander_label = f"<span style='font-size:18px'><strong>{cat}</strong></span> ({count}) – {total_sum}"
-    
+
         subs = grouped[grouped['category'] == cat].copy()
         subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
-    
+
         with st.expander(expander_label, expanded=False):
             for _, sub in subs.iterrows():
                 sub_cat = sub['subcategory']
                 sub_count = sub['count']
                 sub_sum = fmt(sub['sum'])
-    
-                # 🔹 Wiersz podkategorii: pogrubiona nazwa podkategorii, reszta normalnie
+
                 st.markdown(
                     f"<span style='font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</span>",
                     unsafe_allow_html=True
