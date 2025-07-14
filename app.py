@@ -230,8 +230,9 @@ grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'su
 # Usuń podkategorie bez transakcji
 grouped = grouped[grouped['count'] > 0]
 
-# Agregacja sum i liczby dla kategorii
+# Agregacja sum i liczby dla kategorii (tylko te, które mają podkategorie z count > 0)
 total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
+total = total[total['count'] > 0]  # <-- dodaj ten filtr!
 
 # Sortowanie: Przychody na górze, reszta A-Z
 total = pd.concat([
@@ -239,7 +240,6 @@ total = pd.concat([
     total[total['category'] != 'Przychody'].sort_values('category')
 ], ignore_index=True)
 
-# Styl nagłówka kategorii
 def styled_category(label):
     return f"<div style='font-size:1.2rem; font-weight:bold'>{label}</div>"
 
