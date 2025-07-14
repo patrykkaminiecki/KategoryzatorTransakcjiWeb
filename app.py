@@ -139,6 +139,25 @@ def main():
     mask = (df['Date'] >= pd.to_datetime(start)) & (df['Date'] <= pd.to_datetime(end))
     df = df.loc[mask]
 
+    # 🗓️ Miesięczny filtr
+    st.sidebar.markdown("### Filtr miesięczny")
+    
+    available_years = sorted(df['Date'].dt.year.unique())
+    available_months = {
+        1: 'Styczeń', 2: 'Luty', 3: 'Marzec', 4: 'Kwiecień',
+        5: 'Maj', 6: 'Czerwiec', 7: 'Lipiec', 8: 'Sierpień',
+        9: 'Wrzesień', 10: 'Październik', 11: 'Listopad', 12: 'Grudzień'
+    }
+    
+    year_filter = st.sidebar.selectbox("Rok", options=["Wszystkie"] + available_years, index=0)
+    month_filter = st.sidebar.selectbox("Miesiąc", options=["Wszystkie"] + list(available_months.values()), index=0)
+    
+    if year_filter != "Wszystkie" and month_filter != "Wszystkie":
+        # konwersja nazw miesięcy na numery
+        rev_months = {v: k for k, v in available_months.items()}
+        m = rev_months[month_filter]
+        y = year_filter
+        df = df[(df['Date'].dt.year == y) & (df['Date'].dt.month == m)]
 
 
     # --- 6.2) Bulk‑assign (pozostało bez zmian) ---
