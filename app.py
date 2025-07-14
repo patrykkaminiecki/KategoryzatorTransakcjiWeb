@@ -26,8 +26,8 @@ CATEGORIES = {
     'Wakacje': ['Wakacje'],
     'Gotówka': ['Wpłata', 'Wypłata']
 }
-# zapisujemy assignments.csv w katalogu /mnt/data (trwały wolumen)
-ASSIGNMENTS_FILE = Path("/mnt/data/assignments.csv")
+# teraz relative path w bieżącym katalogu
+ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
 # --------------------------------------------------
@@ -76,7 +76,9 @@ class Categorizer:
         if not kc:
             return
         self.map[kc] = (cat, sub)
-        # natychmiast zapisz cały plik
+        # utwórz katalog jeśli potrzeba (na wszelki wypadek)
+        ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
+        # natychmiast zapisujemy
         pd.DataFrame([
             {"description": k, "category": c, "subcategory": s}
             for k,(c,s) in self.map.items()
@@ -101,22 +103,20 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
 # 5) GŁÓWNA FUNKCJA STREAMLIT
 # ------------------------------------
 def main():
-    st.title("🗂 Kategoryzator transakcji + Raporty")
+    st.title("🗂 Kategoryzator + Raporty")
+    cat = Categorizer()  # zawsze wczytaj najnowsze assignments.csv
 
-    # załaduj kategoryzator (wczyta najnowszy assignments.csv)
-    cat = Categorizer()
-
-    # sidebar: wczytaj plik + filtr dat
+    # sidebar: wczytywanie + filtr
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
-        st.sidebar.info("Wczytaj plik CSV, aby zacząć."); return
+        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć."); return
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
         st.error(str(e)); return
 
-    # przygotowanie DataFrame
+    # przygotowanie df
     cols = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.copy(); df.columns = cols
     df = df.rename(columns={
@@ -144,7 +144,7 @@ def main():
         m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
-    # krok 1: grupy po kluczu i formularz
+    # Krok 1: bulk-assign
     df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
     groups = df.groupby('key').groups.values()
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
@@ -165,7 +165,7 @@ def main():
     st.markdown("---")
     st.success("Krok 1: zakończony – assignments.csv zaktualizowany.")
 
-    # krok 2: finalna tabela
+    # Finalna tabela
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
@@ -184,7 +184,7 @@ def main():
         hide_index=True, use_container_width=True
     )
 
-    # krok 3: raport z edited
+    # Raport z edited
     @st.cache_data
     def get_report_tables(df_final):
         grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
@@ -205,11 +205,6 @@ def main():
                            (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
                 st.markdown(f"- {s['subcategory']} ({s['count']}) – {fmt(s['sum'])}")
-
-    # debug: pokaż assignments.csv
-    if ASSIGNMENTS_FILE.exists():
-        st.sidebar.markdown("### assignments.csv")
-        st.sidebar.dataframe(pd.read_csv(ASSIGNMENTS_FILE), use_container_width=True)
 
 if __name__ == "__main__":
     main()
