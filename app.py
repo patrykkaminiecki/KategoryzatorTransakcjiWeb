@@ -29,9 +29,9 @@ CATEGORIES = {
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
-# ------------------------
+# -------------------------
 # 2) EMBEDDINGI
-# ------------------------
+# -------------------------
 @st.cache_resource
 def get_embed_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -43,9 +43,9 @@ def get_pair_embs():
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
-# ------------------------
-# 3) CATEGORIZER
-# ------------------------
+# -------------------------
+# 3) KATEGORIZER
+# -------------------------
 def clean_desc(s):
     text = str(s).replace("'", "").replace('"', "")
     text = re.sub(r'\s+', ' ', text)
@@ -81,9 +81,9 @@ class Categorizer:
             for k,(c,s) in self.map.items()
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
-# ------------------------
+# -------------------------
 # 4) WCZYTANIE CSV
-# ------------------------
+# -------------------------
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
@@ -96,9 +96,9 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
             pass
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
-# ------------------------
-# 5) GŁÓWNA FUNKCJA
-# ------------------------
+# -------------------------
+# 5) Aplikacja główna
+# -------------------------
 def main():
     st.title("🗂 Kategoryzator transakcji + Raporty")
     cat = Categorizer()
@@ -141,6 +141,7 @@ def main():
         m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
+    # Bulk‑assign
     df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
     groups = df.groupby('key').groups.values()
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
@@ -161,6 +162,7 @@ def main():
     st.markdown("---")
     st.success("Krok 1: zakończony – assignments.csv zaktualizowany.")
 
+    # Finalna tabela + edycja
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
@@ -209,16 +211,26 @@ def main():
         total_sum = fmt(row['sum'])
         expander_label = f"{cat_name} ({count}) – {total_sum}"
 
-        subs = grouped[grouped['category'] == cat_name].copy()
-        subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
+        # dobieramy kolor na podstawie kategorii
+        color = "green" if cat_name == "Przychody" else "red"
 
         with st.expander(expander_label, expanded=False):
+            # nagłówek kategorii wewnątrz, z kolorem
+            st.markdown(
+                f"<h4 style='color:{color}; margin-bottom:0.5em;'>{cat_name} ({count}) – {total_sum}</h4>",
+                unsafe_allow_html=True
+            )
+
+            subs = grouped[grouped['category'] == cat_name].copy()
+            subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
+
             for _, sub in subs.iterrows():
                 sub_cat = sub['subcategory']
                 sub_count = sub['count']
                 sub_sum = fmt(sub['sum'])
+                # wiersz podkategorii z tym samym kolorem
                 st.markdown(
-                    f"<span style='font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</span>",
+                    f"<div style='color:{color}; font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</div>",
                     unsafe_allow_html=True
                 )
 
