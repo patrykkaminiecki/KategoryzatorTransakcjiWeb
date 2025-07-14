@@ -268,7 +268,7 @@ def main():
             total[total['category'] != 'Przychody'].sort_values('category')
         ], ignore_index=True)
         return grouped, total
-
+    st.write(final[final['category'] == 'Transport'])
     grouped, total = get_report_tables(final)
 
     for _, row in total.iterrows():
