@@ -3,7 +3,7 @@ import io
 import streamlit as st
 from pathlib import Path
 from rapidfuzz import process, fuzz
-import git  # opcjonalnie, jeśli auto‐push
+import git  # opcjonalnie, jeśli auto‑push
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -41,15 +41,12 @@ class Categorizer:
                 st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
 
     def suggest(self, key: str, amount: float):
-        # 1. historia
-        if key in self.map:
+        if key in self.map and self.map[key][0]:
             return self.map[key]
-        # 2. fuzzy
         if self.map:
             best, score, _ = process.extractOne(key, list(self.map.keys()), scorer=fuzz.token_sort_ratio)
             if score > 80:
                 return self.map[best]
-        # 3. domyślne wg kwoty
         if amount >= 0:
             return ('Przychody', 'Inne')
         return None
@@ -114,7 +111,6 @@ def main():
         st.error(str(e))
         return
 
-    # mapowanie kolumn
     df = df_raw.loc[:, df_raw.columns.notna()]
     df.columns = [c.strip() for c in df.columns]
     df.rename(columns={
@@ -127,36 +123,32 @@ def main():
     }, inplace=True)
     df = df[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']]
 
-    # 5.4) Przygotuj grupy:
-    # a) transakcje z rachunkiem → grupuj po numerze
+    # 5.4) Przygotuj grupy
     acct_numbers = df['Nr rachunku'].dropna().unique().tolist()
     acct_groups = [df.index[df['Nr rachunku']==acct].tolist() for acct in acct_numbers]
-    # b) transakcje bez rachunku → indywidualnie po opisie
-    no_acct_idxs = df.index[df['Nr rachunku'].isna()].tolist()
-    desc_groups = [[idx] for idx in no_acct_idxs]
-
+    no_acct = df.index[df['Nr rachunku'].isna()].tolist()
+    desc_groups = [[i] for i in no_acct]
     groups = acct_groups + desc_groups
 
-    # 5.5) Bulk‑assign dla każdej grupy
-    st.markdown("### Przypisz kategorię do każdej nieoznaczonej grupy")
+    # 5.5) Bulk‑assign
+    st.markdown("### Przypisz kategorię do każdej grupy")
     for idxs in groups:
-        # klucz: albo rachunek, albo opis pierwszego wiersza
         first = idxs[0]
         acct = df.loc[first, 'Nr rachunku']
         key = str(acct) if pd.notna(acct) else str(df.loc[first, 'Description'])
-        if key in cat.map:
+        # pomiń tylko klucze ze znaną, niepustą kategorią
+        if key in cat.map and cat.map[key][0]:
             continue
 
-        # pokaż przykłady z grupy
         descs = df.loc[idxs, 'Description'].unique().tolist()
         titles = df.loc[idxs, 'Tytuł'].unique().tolist()
         amount = df.loc[first, 'Amount']
         st.write(f"**Klucz:** {key}")
         st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
         st.write(f"- Tytuły: {', '.join(titles[:3])}{'...' if len(titles)>3 else ''}")
-        st.write(f"- Kwota przykładowa: {amount:.2f}")
+        st.write(f"- Kwota przykład: {amount:.2f}")
 
-        sugg = cat.suggest(key, amount) or ("", "")
+        sugg = cat.suggest(key, amount) or ("","")
         sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
                                index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
                                key=f"cat_{key}")
@@ -164,22 +156,21 @@ def main():
                                index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
                                key=f"sub_{key}")
 
-        # zapisz dla całej grupy
-        for idx in idxs:
+        for i in idxs:
             cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---")
-    st.success("Grupy oznaczone – teraz skoryguj pojedyncze wiersze w tabeli.")
+    st.success("Grupy oznaczone – skoryguj ewentualnie pojedyncze wiersze.")
 
-    # 5.6) Finalna tabela + keys_list
+    # 5.6) Finalna tabela
     keys_list = []
-    for i, row in df.iterrows():
+    for _, row in df.iterrows():
         acct = row['Nr rachunku']
         key = str(acct) if pd.notna(acct) else str(row['Description'])
         keys_list.append(key)
 
-    df['category'] = [cat.map.get(k, ("", ""))[0] for k in keys_list]
-    df['subcategory'] = [cat.map.get(k, ("", ""))[1] for k in keys_list]
+    df['category'] = [cat.map.get(k,("", ""))[0] for k in keys_list]
+    df['subcategory'] = [cat.map.get(k,("", ""))[1] for k in keys_list]
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited = st.data_editor(
@@ -191,16 +182,14 @@ def main():
             'Amount': st.column_config.NumberColumn("Kwota", format="%.2f"),
             'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
-            'subcategory': st.column_config.SelectboxColumn(
-                "Podkategoria",
-                options=[s for subs in CATEGORIES.values() for s in subs]
-            )
+            'subcategory': st.column_config.SelectboxColumn("Podkategoria",
+                                 options=[s for subs in CATEGORIES.values() for s in subs])
         },
         hide_index=True,
         use_container_width=True
     )
 
-    # 5.7) Zapis + opcjonalny push
+    # 5.7) Zapis + push
     if st.button("💾 Zapisz i eksportuj"):
         for idx, row in enumerate(edited.itertuples(index=False)):
             key = keys_list[idx]
