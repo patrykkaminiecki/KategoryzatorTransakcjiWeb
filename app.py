@@ -227,29 +227,38 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-    # Przygotuj DataFrame z total (wynik z get_report_tables)
-    # total ma kolumny: category, count, sum
+        # Przygotuj DataFrame z total (wynik z get_report_tables)
     chart_df = total.copy()
     
-    # Definiujemy warunek kolorowania: zielony jeśli Przychody, inaczej czerwony
+    # Ustal kolejność kategorii: 'Przychody' najpierw, potem reszta A–Z
+    others = sorted([c for c in chart_df['category'] if c != 'Przychody'])
+    order = ['Przychody'] + others
+    
     color_cond = alt.condition(
         alt.datum.category == 'Przychody',
         alt.value("green"),
         alt.value("red")
     )
     
-    chart = (
+    base = (
         alt.Chart(chart_df)
-           .mark_bar()
            .encode(
-               x=alt.X("category:N", title="Kategoria"),
-               y=alt.Y("sum:Q", title="Suma"),
-               color=color_cond,
-               tooltip=[alt.Tooltip("category:N", title="Kategoria"),
-                        alt.Tooltip("sum:Q", title="Suma", format=",.2f")]
+               x=alt.X("category:N", sort=order, axis=None),
+               y=alt.Y("sum:Q", axis=None),
+               color=color_cond
            )
-           .properties(width="container")
     )
+    
+    bars = base.mark_bar()
+    
+    labels = base.mark_text(
+        dy=-5,  # przesunięcie w górę w obrębie słupka; dostosuj w razie potrzeby
+        color="black"
+    ).encode(
+        text=alt.Text("sum:Q", format=",.2f")
+    )
+    
+    chart = (bars + labels).properties(width="container", height=400)
     
     st.altair_chart(chart, use_container_width=True)
 
