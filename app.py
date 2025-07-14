@@ -53,6 +53,9 @@ PAIR_EMBS = get_pair_embs()
 # ------------------------------------
 # 3) KLASA DO ZARZĄDZANIA PRZYPISANIAMI
 # ------------------------------------
+def clean_desc(s):
+    return str(s).strip().replace("'", "").replace('"', '')
+
 class Categorizer:
     def __init__(self):
         self.map = {}
@@ -60,13 +63,15 @@ class Categorizer:
             try:
                 df = pd.read_csv(ASSIGNMENTS_FILE)
                 for _, row in df.iterrows():
-                    self.map[str(row['description'])] = (row['category'], row['subcategory'])
+                    desc = clean_desc(row['description'])
+                    self.map[desc] = (row['category'], row['subcategory'])
             except Exception:
                 st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
 
     def suggest(self, key: str, amount: float):
-        if key in self.map and self.map[key][0]:
-            return self.map[key]
+        key_clean = clean_desc(key)
+        if key_clean in self.map and self.map[key_clean][0]:
+            return self.map[key_clean]
         emb = EMBED_MODEL.encode([key], convert_to_numpy=True)
         sims = cosine_similarity(emb, PAIR_EMBS)[0]
         best_idx = int(np.argmax(sims)); best_score = sims[best_idx]
