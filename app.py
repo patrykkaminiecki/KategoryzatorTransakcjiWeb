@@ -258,16 +258,11 @@ def main():
     # --- Funkcja raportowa pod cache ---
     @st.cache_data(show_spinner=False)
     def get_report_tables(final):
-        # Pełna lista kategorii/podkategorii
-        pairs = pd.DataFrame([
-            {'category': cat, 'subcategory': sub}
-            for cat, subs in CATEGORIES.items() for sub in subs
-        ])
+        # Agreguj tylko istniejące kategorie/podkategorie z transakcjami
         grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
-        grouped = pairs.merge(grouped, on=['category', 'subcategory'], how='left').fillna({'count': 0, 'sum': 0})
-        grouped['count'] = grouped['count'].astype(int)
-        # Suma po kategoriach (nawet jak count==0)
+        grouped = grouped[grouped['count'] > 0]
         total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
+        total = total[total['count'] > 0]
         total = pd.concat([
             total[total['category'] == 'Przychody'],
             total[total['category'] != 'Przychody'].sort_values('category')
