@@ -185,7 +185,7 @@ def main():
         default = opts.index(sugg[1]) if sugg[1] in opts else 0
         sel_sub = st.selectbox("Podkategoria", opts, index=default, key=f"sub_{key}")
         cat.assign(key, sel_cat, sel_sub)
-
+        cat.save()  # <— od razu zapisujemy do assignments.csv, by przetrwało odświeżenie
     st.markdown("---")
     st.success("Krok 1: zakończony — przypisania w sesji.")
 
