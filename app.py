@@ -220,41 +220,41 @@ def main():
         except: st.warning("Push nieudany")
 
 # --- 6.4) Raport z podkategoriami ---
-st.markdown("## 📊 Raport: ilość i suma według kategorii")
+    st.markdown("## 📊 Raport: ilość i suma według kategorii")
 
-def format_amount(val):
-    return f"{abs(val):,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
+    def format_amount(val):
+        return f"{abs(val):,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
 
-grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
+    grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
 
-# Usuń podkategorie bez transakcji
-grouped = grouped[grouped['count'] > 0]
+    # Usuń podkategorie bez transakcji
+    grouped = grouped[grouped['count'] > 0]
 
-# Agregacja sum i liczby dla kategorii (tylko te, które mają podkategorie z count > 0)
-total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
-total = total[total['count'] > 0]  # <-- dodaj ten filtr!
+    # Agregacja sum i liczby dla kategorii (tylko te, które mają podkategorie z count > 0)
+    total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
+    total = total[total['count'] > 0]  # <-- dodaj ten filtr!
 
-# Sortowanie: Przychody na górze, reszta A-Z
-total = pd.concat([
-    total[total['category'] == 'Przychody'],
-    total[total['category'] != 'Przychody'].sort_values('category')
-], ignore_index=True)
+    # Sortowanie: Przychody na górze, reszta A-Z
+    total = pd.concat([
+        total[total['category'] == 'Przychody'],
+        total[total['category'] != 'Przychody'].sort_values('category')
+    ], ignore_index=True)
 
-def styled_category(label):
-    return f"<div style='font-size:1.2rem; font-weight:bold'>{label}</div>"
+    def styled_category(label):
+        return f"<div style='font-size:1.2rem; font-weight:bold'>{label}</div>"
 
-for _, row in total.iterrows():
-    cat = row['category']
-    sum_text = format_amount(row['sum'])
-    label = f"{cat} ({row['count']}) – {sum_text}"
-    subs = grouped[(grouped['category'] == cat) & (grouped['subcategory'] != cat)]
-    if not subs.empty:
-        with st.expander(styled_category(label), expanded=False):
-            for _, sub in subs.iterrows():
-                sublabel = f"{sub['subcategory']} ({sub['count']}) – {format_amount(sub['sum'])}"
-                st.markdown(f"• {sublabel}")
-    else:
-        st.markdown(styled_category(label), unsafe_allow_html=True)
+    for _, row in total.iterrows():
+        cat = row['category']
+        sum_text = format_amount(row['sum'])
+        label = f"{cat} ({row['count']}) – {sum_text}"
+        subs = grouped[(grouped['category'] == cat) & (grouped['subcategory'] != cat)]
+        if not subs.empty:
+            with st.expander(styled_category(label), expanded=False):
+                for _, sub in subs.iterrows():
+                    sublabel = f"{sub['subcategory']} ({sub['count']}) – {format_amount(sub['sum'])}"
+                    st.markdown(f"• {sublabel}")
+        else:
+            st.markdown(styled_category(label), unsafe_allow_html=True)
 
 if __name__=="__main__":
     main()
