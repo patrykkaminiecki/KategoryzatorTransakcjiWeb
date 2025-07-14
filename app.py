@@ -156,8 +156,14 @@ def main():
         sugg = cat.suggest(key, amt)
         sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
                                index=list(CATEGORIES.keys()).index(sugg[0]), key=f"cat_{key}")
-        sel_sub = st.selectbox("Podkategoria", CATEGORIES[sel_cat],
-                               index=CATEGORIES[sel_cat].index(sugg[1]), key=f"sub_{key}")
+        options = CATEGORIES.get(sel_cat, [])
+        default_idx = options.index(sugg[1]) if sugg[1] in options else 0
+        sel_sub = st.selectbox(
+            "Podkategoria",
+            options,
+            index=default_idx,
+            key=f"sub_{key}"
+        )
         cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---"); st.success("Krok 1: Gotowe!")
