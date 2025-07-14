@@ -1,218 +1,227 @@
-import streamlit as st
 import pandas as pd
-from github import Github, UnknownObjectException
 import io
+import streamlit as st
+from pathlib import Path
+from rapidfuzz import process, fuzz
+import git  # tylko jeśli korzystasz z auto‑push
+import os
 
-# --- Konfiguracja strony ---
-st.set_page_config(
-    page_title="Kategoryzator Transakcji",
-    page_icon="💰",
-    layout="wide"
-)
-
-# --- Kategorie i Podkategorie ---
-# Słownik z predefiniowanymi kategoriami i podkategoriami
+# ---------------------------
+# 1) TWOJA STRUKTURA KATEGORII
+# ---------------------------
 CATEGORIES = {
-    "Przychody": ["Patryk", "Jolka", "Świadczenia", "Inne"],
-    "Rachunki": ["Prąd", "Gaz", "Woda", "Odpady", "Internet", "Telefon", "Subskrypcje", "Przedszkole", "Żłobek", "Podatki"],
-    "Transport": ["Paliwo", "Ubezpieczenie", "Parking", "Przeglądy"],
-    "Kredyty": ["Hipoteka", "Samochód", "TV+Dyson"],
-    "Jedzenie": ["Zakupy Spożywcze"],
-    "Zdrowie": ["Apteka", "Lekarz", "Kosmetyki", "Fryzjer"],
-    "Odzież": ["Ubrania", "Buty"],
-    "Dom i Ogród": ["Dom", "Ogród", "Zwierzęta"],
-    "Inne": ["Prezenty", "Rozrywka", "Hobby", "Edukacja"],
-    "Oszczędności": ["Poduszka bezpieczeństwa", "Fundusz celowy", "Inwestycje"],
-    "Nadpłata Długów": ["Hipoteka", "Samochód", "TV+Dyson"],
-    "Wakacje": ["Wakacje"],
-    "Gotówka": ["Wpłata", "Wypłata"]
+    'Przychody': ['Patryk', 'Jolka', 'Świadczenia', 'Inne'],
+    'Rachunki': ['Prąd', 'Gaz', 'Woda', 'Odpady', 'Internet', 'Telefon', 'Subskrypcje', 'Przedszkole', 'Żłobek', 'Podatki'],
+    'Transport': ['Paliwo', 'Ubezpieczenie', 'Parking', 'Przeglądy'],
+    'Kredyty': ['Hipoteka', 'Samochód', 'TV+Dyson'],
+    'Jedzenie': ['Zakupy Spożywcze'],
+    'Zdrowie': ['Apteka', 'Lekarz', 'Kosmetyki', 'Fryzjer'],
+    'Odzież': ['Ubrania', 'Buty'],
+    'Dom i Ogród': ['Dom', 'Ogród', 'Zwierzęta'],
+    'Inne': ['Prezenty', 'Rozrywka', 'Hobby', 'Edukacja'],
+    'Oszczędności': ['Poduszka bezpieczeństwa', 'Fundusz celowy', 'Inwestycje'],
+    'Nadpłata Długów': ['Hipoteka', 'Samochód', 'TV+Dyson'],
+    'Wakacje': ['Wakacje'],
+    'Gotówka': ['Wpłata', 'Wypłata']
 }
 
-# --- Funkcje do obsługi GitHub ---
+ASSIGNMENTS_FILE = Path("assignments.csv")
 
-@st.cache_resource
-def get_github_repo():
-    """Nawiązuje połączenie z repozytorium GitHub."""
-    try:
-        g = Github(st.secrets["GITHUB_TOKEN"])
-        repo = g.get_repo(st.secrets["GITHUB_REPO"])
-        return repo
-    except Exception as e:
-        st.error(f"Błąd połączenia z GitHub: {e}")
-        st.error("Upewnij się, że GITHUB_TOKEN i GITHUB_REPO są poprawnie skonfigurowane w secrets.toml.")
+# ---------------------------------
+# 2) KLASA DO ZARZĄDZANIA ASSIGNMENT
+# ---------------------------------
+class Categorizer:
+    def __init__(self):
+        # wczytaj istniejące przypisania
+        self.map = {}
+        if ASSIGNMENTS_FILE.exists():
+            try:
+                df = pd.read_csv(ASSIGNMENTS_FILE)
+                self.map = {
+                    desc: (row['category'], row['subcategory'])
+                    for _, row in df.iterrows()
+                    for desc in [row['description']]
+                }
+            except Exception:
+                st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
+
+    def suggest(self, desc: str):
+        if not self.map:
+            return None
+        best, score, _ = process.extractOne(desc, list(self.map.keys()), scorer=fuzz.token_sort_ratio)
+        if score > 80:
+            return self.map[best]
         return None
 
-def get_assignments_from_github(repo):
-    """Pobiera plik z przypisaniami kategorii z GitHub."""
-    try:
-        content = repo.get_contents("assignments.csv")
-        csv_content = content.decoded_content.decode('utf-8')
-        return pd.read_csv(io.StringIO(csv_content))
-    except UnknownObjectException:
-        # Plik nie istnieje, tworzymy pusty DataFrame
-        return pd.DataFrame(columns=["key", "Kategoria", "Podkategoria"])
-    except Exception as e:
-        st.error(f"Nie udało się wczytać pliku 'assignments.csv': {e}")
-        return pd.DataFrame(columns=["key", "Kategoria", "Podkategoria"])
+    def assign(self, desc: str, cat: str, sub: str):
+        self.map[desc] = (cat, sub)
 
+    def save(self):
+        df = pd.DataFrame([
+            {"description": desc, "category": cat, "subcategory": sub}
+            for desc, (cat, sub) in self.map.items()
+        ])
+        df.to_csv(ASSIGNMENTS_FILE, index=False)
 
-def push_assignments_to_github(repo, df_assignments):
-    """Wysyła zaktualizowany plik z przypisaniami na GitHub."""
-    csv_buffer = io.StringIO()
-    df_assignments.to_csv(csv_buffer, index=False)
-    csv_content = csv_buffer.getvalue()
+# ----------------------------------------------------
+# 3) FUNKCJA DO AUTO‑PUSH (opcjonalnie: GitPython + Secrets)
+# ----------------------------------------------------
+def auto_git_commit():
+    token = st.secrets["GITHUB_TOKEN"]
+    repo_name = st.secrets["GITHUB_REPO"]
+    author = st.secrets["GITHUB_AUTHOR"]
+    repo_url = f"https://{token}@github.com/{repo_name}.git"
 
-    commit_message = "Aktualizacja przypisań kategorii przez aplikację Streamlit"
-
-    try:
-        contents = repo.get_contents("assignments.csv")
-        repo.update_file(contents.path, commit_message, csv_content, contents.sha)
-        st.success("✅ Pomyślnie zaktualizowano przypisania na GitHub!")
-    except UnknownObjectException:
-        repo.create_file("assignments.csv", commit_message, csv_content)
-        st.success("✅ Pomyślnie utworzono i zapisano przypisania na GitHub!")
-    except Exception as e:
-        st.error(f"Błąd podczas zapisu na GitHub: {e}")
-
-# --- Główna logika aplikacji ---
-
-st.title("💰 Aplikacja do Kategoryzacji Transakcji Bankowych")
-st.markdown("""
-Wgraj plik CSV z historią transakcji, a aplikacja pomoże Ci je skategoryzować.
-Twoje wybory są zapamiętywane i automatycznie stosowane w przyszłości.
-""")
-
-# Inicjalizacja repozytorium
-repo = get_github_repo()
-
-# Inicjalizacja stanu sesji, aby przechowywać dane między interakcjami
-if 'assignments' not in st.session_state:
-    if repo:
-        st.session_state.assignments = get_assignments_from_github(repo)
+    if not Path(".git").exists():
+        git.Repo.clone_from(repo_url, ".", branch="main")
+        repo = git.Repo(".")
     else:
-        st.session_state.assignments = pd.DataFrame(columns=["key", "Kategoria", "Podkategoria"])
+        repo = git.Repo(".")
 
-if 'transactions' not in st.session_state:
-    st.session_state.transactions = None
+    # nadpisz origin z tokenem
+    if "origin" not in [r.name for r in repo.remotes]:
+        repo.create_remote("origin", repo_url)
+    else:
+        repo.remotes.origin.set_url(repo_url)
 
+    repo.index.add([str(ASSIGNMENTS_FILE)])
+    if repo.is_dirty():
+        name, email = author.replace(">", "").split(" <")
+        repo.index.commit("Automatyczny zapis assignments.csv", author=git.Actor(name, email))
+        repo.remotes.origin.push()
 
-# Krok 1: Wgranie pliku
-uploaded_file = st.file_uploader(
-    "Wybierz plik CSV z historią transakcji",
-    type="csv"
-)
+# ----------------------------------------
+# 4) POMOCNICZA FUNKCJA: wczytywanie CSV
+# ----------------------------------------
+def load_bank_csv(uploaded) -> pd.DataFrame:
+    raw = uploaded.getvalue()
+    for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
+        try:
+            text = raw.decode(enc, errors='ignore').splitlines()
+            # znajdź pierwszy wiersz, który zawiera „Data” i „Kwota”
+            idx = next(i for i, line in enumerate(text) if 'Data' in line and 'Kwota' in line)
+            data = '\n'.join(text[idx:])
+            df = pd.read_csv(io.StringIO(data), sep=sep, decimal=',')
+            return df
+        except Exception:
+            continue
+    raise ValueError("Nie udało się wczytać pliku CSV.")
 
-if uploaded_file is not None:
+# -------------------------
+# 5) GŁÓWNA FUNKCJA STREAMLIT
+# -------------------------
+def main():
+    st.title("🗂 Kategoryzator transakcji bankowych")
+
+    # 5.1) Wczytaj przypisania
+    cat = Categorizer()
+
+    # 5.2) Upload pliku bankowego
+    uploaded = st.file_uploader("Wybierz CSV z banku", type=["csv"])
+    if not uploaded:
+        st.info("Wczytaj plik, aby zacząć kategoryzować.")
+        return
+
+    # 5.3) Parsuj i mapuj kolumny
     try:
-        df_trans = pd.read_csv(
-            uploaded_file,
-            sep=';',
-            encoding='cp1250',
-            header=17
-        )
-        df_trans.columns = [
-            col.replace('"', '').replace('³', 'ł').replace('æ', 'ę').replace('¿', 'ż')
-               .replace('¹', 'ą').replace('œ', 'ś').replace('ó', 'ó')
-               .replace('ä', 'a').replace('æ', 'ę').replace('Ÿ', 'Ż')
-               .replace('Ó', 'Ó').replace('£', 'Ł').replace('ñ', 'ń')
-               .replace('Ê', 'Ę').replace('ê', 'ę').replace('¿', 'ż')
-               .replace('³', 'ł').replace('Œ', 'Ś').replace('ú', 'ó')
-               .strip()
-            for col in df_trans.columns
-        ]
-        st.success("Plik CSV wczytany pomyślnie!")
-        st.write("Kolumny w pliku:", df_trans.columns)
-        df_trans['key'] = (df_trans['Tytuł'].fillna('') + ' ' + df_trans['Dane kontrahenta'].fillna('')).str.lower().str.strip()
-        df_merged = pd.merge(df_trans, st.session_state.assignments, on='key', how='left')
-        st.session_state.transactions = df_merged
+        df_raw = load_bank_csv(uploaded)
     except Exception as e:
-        st.error(f"Błąd podczas przetwarzania pliku: {e}")
-        st.warning("Upewnij się, że plik ma kodowanie 'cp1250', separator ';' oraz nagłówek w wierszu 11.")
+        st.error(str(e))
+        return
 
-# Jeśli transakcje są w stanie sesji, kontynuujemy pracę
-if st.session_state.transactions is not None:
-    df = st.session_state.transactions
+    # przytnij i mapuj
+    df_raw = df_raw.loc[:, df_raw.columns.notna()]
+    df_raw.columns = [c.strip() for c in df_raw.columns]
+    df_raw.rename(columns={
+        'Data transakcji': 'Date',
+        'Dane kontrahenta': 'Description',
+        'Tytuł': 'Tytuł',
+        'Nr rachunku': 'Nr rachunku',
+        'Kwota transakcji (waluta rachunku)': 'Amount',
+        'Kwota blokady/zwolnienie blokady': 'Kwota blokady'
+    }, inplace=True)
 
-    # Krok 2: Kategoryzacja nowych transakcji
-    uncategorized_df = df[df['Kategoria'].isna()]
-    unique_new_keys = uncategorized_df['key'].unique()
+    # wybierz kolumny potrzebne
+    cols = ['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']
+    df = df_raw[cols].copy()
 
-    if len(unique_new_keys) > 0:
-        st.subheader("✍️ Nowe transakcje do skategoryzowania")
-        st.info(f"Znaleziono {len(unique_new_keys)} unikalnych transakcji, które wymagają przypisania kategorii. Wypełnij poniższe pola, a Twój wybór zostanie zapamiętany.")
+    # 5.4) Podziel na grupy po podobnym opisie
+    descriptions = df['Description'].fillna('').unique().tolist()
+    to_process = set(descriptions)
+    groups = []
+    while to_process:
+        desc = to_process.pop()
+        # znajdź wszystkie podobne opisy
+        matches = [d for d in descriptions
+                   if fuzz.token_sort_ratio(desc, d) > 80]
+        # usuń z to_process
+        for m in matches:
+            to_process.discard(m)
+        groups.append(matches)
 
-        # Używamy expandera, żeby nie zaśmiecać widoku
-        with st.expander("Kliknij, aby przypisać kategorie"):
-            new_assignments = {}
-            for key in unique_new_keys:
-                st.markdown(f"**Transakcja:** `{key}`")
-                cols = st.columns(2)
-                # Wybór kategorii głównej
-                cat = cols[0].selectbox("Kategoria", options=list(CATEGORIES.keys()), key=f"cat_{key}", index=None, placeholder="Wybierz kategorię...")
-                if cat:
-                    # Wybór podkategorii na podstawie wybranej kategorii głównej
-                    sub_cat = cols[1].selectbox("Podkategoria", options=CATEGORIES[cat], key=f"sub_{key}", index=None, placeholder="Wybierz podkategorię...")
-                    if sub_cat:
-                        new_assignments[key] = {'Kategoria': cat, 'Podkategoria': sub_cat}
+    # 5.5) Dla każdej grupy: pytanie o kategorię
+    st.markdown("### Przypisz kategorie dla wykrytych grup transakcji")
+    for group in groups:
+        # sprawdź, czy już przypisane
+        if all(g in cat.map for g in group):
+            continue
+        # zaproponuj kategorię na podstawie pierwszego w grupie
+        sugg = cat.suggest(group[0]) or ("", "")
+        col1, col2 = st.columns([2,1])
+        with col1:
+            st.write(f"**Opis:** `{group[0]}`  _(oraz {len(group)-1} podobnych)_")
+        with col2:
+            sel_cat = st.selectbox("Kategoria", options=list(CATEGORIES.keys()),
+                                   index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
+                                   key="cat_"+group[0])
+            sel_sub = st.selectbox("Podkategoria",
+                                   options=CATEGORIES[sel_cat],
+                                   index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES[sel_cat] else 0,
+                                   key="sub_"+group[0])
+        # zapisz dla całej grupy
+        for g in group:
+            cat.assign(g, sel_cat, sel_sub)
 
-            if st.button("Zapisz nowe kategorie", type="primary"):
-                # Aktualizacja DataFrame z przypisaniami
-                new_assignments_df = pd.DataFrame.from_dict(new_assignments, orient='index').reset_index().rename(columns={'index': 'key'})
-                st.session_state.assignments = pd.concat([st.session_state.assignments, new_assignments_df], ignore_index=True).drop_duplicates(subset=['key'], keep='last')
-                
-                # Ponowne scalenie danych i odświeżenie widoku
-                st.session_state.transactions = pd.merge(st.session_state.transactions.drop(columns=['Kategoria', 'Podkategoria']), st.session_state.assignments, on='key', how='left')
-                st.rerun() # Odświeża aplikację, aby pokazać zaktualizowane dane
+    st.markdown("---")
+    st.success("Wszystkie grupy mają teraz przypisane kategorie. Możesz jeszcze skorygować pojedyncze transakcje poniżej.")
 
-    # Krok 3: Wyświetlanie i edycja wszystkich transakcji
-    st.subheader("📊 Twoje transakcje")
-    st.markdown("Możesz ręcznie zmienić kategorię dla każdej transakcji poniżej. Zmiany zostaną uwzględnione przy ostatecznym zapisie.")
+    # 5.6) Przypisz kategorie do df i pokaż edytor
+    df['category'] = df['Description'].apply(lambda d: cat.map.get(d, ("", ""))[0])
+    df['subcategory'] = df['Description'].apply(lambda d: cat.map.get(d, ("", ""))[1])
 
-    # Lista kolumn do wyświetlenia
-    display_columns = [
-        'Data transakcji', 'Tytuł', 'Dane kontrahenta', 'Kwota transakcji (waluta rachunku)', 'Kategoria', 'Podkategoria'
-    ]
-    # Upewniamy się, że kolumny Kategoria i Podkategoria istnieją
-    if 'Kategoria' not in df.columns:
-        df['Kategoria'] = None
-    if 'Podkategoria' not in df.columns:
-        df['Podkategoria'] = None
-
-    # Edytor danych - serce aplikacji
-    edited_df = st.data_editor(
-        df[display_columns],
+    edited = st.data_editor(
+        df,
         column_config={
-            "Kategoria": st.column_config.SelectboxColumn(
-                "Kategoria",
-                options=list(CATEGORIES.keys()),
-                required=True,
-            ),
-            "Podkategoria": st.column_config.SelectboxColumn(
-                "Podkategoria",
-                options=[sub for cat in CATEGORIES.values() for sub in cat], # Płaska lista wszystkich podkategorii
-                required=True,
-            ),
-            "Kwota transakcji (waluta rachunku)": st.column_config.NumberColumn(
-                "Kwota",
-                format="%.2f PLN"
-            )
+            'Date': st.column_config.Column("Data"),
+            'Description': st.column_config.Column("Opis"),
+            'Tytuł': st.column_config.Column("Tytuł"),
+            'Nr rachunku': st.column_config.Column("Rachunek"),
+            'Amount': st.column_config.NumberColumn("Kwota", format="%.2f"),
+            'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
+            'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
+            'subcategory': st.column_config.SelectboxColumn("Podkategoria", options=[s for subs in CATEGORIES.values() for s in subs])
         },
         hide_index=True,
-        use_container_width=True,
-        num_rows="dynamic" # pozwala na dodawanie/usuwanie wierszy, choć tu głównie edytujemy
+        use_container_width=True
     )
 
-    # Krok 4: Zapis zmian
-    if st.button("💾 Zapisz wszystkie zmiany i wyślij do GitHub", disabled=(repo is None)):
-        # Aktualizujemy główny zbiór przypisań na podstawie edycji w tabeli
-        # Bierzemy tylko unikalne klucze i ich ostatnie przypisania z edytowanej tabeli
-        final_assignments = edited_df[['Kategoria', 'Podkategoria']].copy()
-        final_assignments['key'] = st.session_state.transactions['key'] # Dodajemy klucz z oryginalnego DF
-        
-        # Usuwamy puste i duplikaty, zachowując najnowsze przypisanie
-        final_assignments = final_assignments.dropna(subset=['Kategoria', 'Podkategoria'])
-        final_assignments = final_assignments.drop_duplicates(subset=['key'], keep='last')
+    # 5.7) Zapis i push
+    if st.button("💾 Zapisz i wyeksportuj"):
+        # uaktualnij mapę
+        for _, row in edited.iterrows():
+            cat.assign(row['Description'], row['category'], row['subcategory'])
+        # zapisz assignments.csv
+        cat.save()
+        st.success("Zapisano przypisania do assignments.csv")
+        # auto‑push
+        try:
+            auto_git_commit()
+            st.success("Wysłano assignments.csv do GitHub")
+        except Exception as e:
+            st.warning(f"Push nieudany: {e}")
+        # pobierz wynik
+        out = edited.to_csv(index=False).encode('utf-8')
+        st.download_button("⬇️ Pobierz wynikowy CSV", data=out, file_name="wynik.csv")
 
-        # Zapisujemy na GitHub
-        push_assignments_to_github(repo, final_assignments)
-        st.session_state.assignments = final_assignments # Aktualizujemy stan sesji
+if __name__ == "__main__":
+    main()
