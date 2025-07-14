@@ -241,6 +241,7 @@ def main():
     ], ignore_index=True)
 
     # --- Funkcja raportowa pod cache ---
+    @st.cache_data(show_spinner=False)
     def get_report_tables(final):
         grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
         grouped = grouped[grouped['count'] > 0]
