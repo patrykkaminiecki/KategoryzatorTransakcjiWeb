@@ -134,7 +134,8 @@ def main():
 
     # 5.4) Grupowanie po numerze rachunku
     acct_numbers = df['Nr rachunku'].dropna().unique().tolist()
-    groups = [df.index[df['Nr rachunku']==acct].tolist() for acct in acct_numbers if (df['Nr rachunku']==acct).sum()>1]
+    groups = [df.index[df['Nr rachunku']==acct].tolist()
+              for acct in acct_numbers if (df['Nr rachunku']==acct).sum()>1]
 
     # 5.5) Bulk‐assign dla każdej grupy
     st.markdown("### Przypisz kategorię do każdej grupy transakcji (po rachunku)")
@@ -162,11 +163,13 @@ def main():
     st.markdown("---")
     st.success("Grupy oznaczone – możesz teraz skorygować pojedyncze transakcje.")
 
-    # 5.6) Finalna tabela (dodajemy ukrytą kolumnę _key)
-    df['_key'] = df['Nr rachunku'].astype(str)
-    df['category'] = df['_key'].apply(lambda k: cat.map.get(k,('',''))[0])
-    df['subcategory'] = df['_key'].apply(lambda k: cat.map.get(k,('',''))[1])
-    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory','_key']]
+    # 5.6) Finalna tabela (bez _key i Nr rachunku)
+    # Zachowaj listę kluczy w sesji
+    keys_list = df['Nr rachunku'].astype(str).tolist()
+
+    df['category'] = df['Nr rachunku'].astype(str).apply(lambda k: cat.map.get(k,('',''))[0])
+    df['subcategory'] = df['Nr rachunku'].astype(str).apply(lambda k: cat.map.get(k,('',''))[1])
+    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited = st.data_editor(
         final,
@@ -178,8 +181,7 @@ def main():
             'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn("Podkategoria",
-                                 options=[s for subs in CATEGORIES.values() for s in subs]),
-            '_key': st.column_config.Column("Klucz", visible=False)
+                                 options=[s for subs in CATEGORIES.values() for s in subs])
         },
         hide_index=True,
         use_container_width=True
@@ -187,10 +189,9 @@ def main():
 
     # 5.7) Zapis i (opcjonalnie) push
     if st.button("💾 Zapisz i wyeksportuj"):
-        # Aktualizacja mapy z edycji
-        for _, row in edited.iterrows():
-            k = row['_key']
-            cat.assign(k, row['category'], row['subcategory'])
+        for idx, row in enumerate(edited.itertuples(index=False)):
+            key = keys_list[idx]
+            cat.assign(str(key), row.category, row.subcategory)
         cat.save()
         st.success("Zapisano assignments.csv")
 
@@ -200,7 +201,7 @@ def main():
         except Exception as e:
             st.warning(f"Push nieudany: {e}")
 
-        out = edited.drop(columns=['_key']).to_csv(index=False).encode('utf-8')
+        out = edited.to_csv(index=False).encode('utf-8')
         st.download_button("⬇️ Pobierz wynikowy CSV", data=out, file_name="wynik.csv")
 
 if __name__ == "__main__":
