@@ -29,9 +29,9 @@ CATEGORIES = {
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
-# -------------------------
+# ------------------------
 # 2) EMBEDDINGI
-# -------------------------
+# ------------------------
 @st.cache_resource
 def get_embed_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -43,9 +43,9 @@ def get_pair_embs():
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
-# -------------------------
-# 3) KATEGORIZER
-# -------------------------
+# ------------------------
+# 3) CATEGORIZER
+# ------------------------
 def clean_desc(s):
     text = str(s).replace("'", "").replace('"', "")
     text = re.sub(r'\s+', ' ', text)
@@ -81,9 +81,9 @@ class Categorizer:
             for k,(c,s) in self.map.items()
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
-# -------------------------
-# 4) Wczytywanie pliku
-# -------------------------
+# ------------------------
+# 4) WCZYTANIE CSV
+# ------------------------
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
@@ -96,9 +96,9 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
             pass
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
-# -------------------------
-# 5) Aplikacja główna
-# -------------------------
+# ------------------------
+# 5) GŁÓWNA FUNKCJA
+# ------------------------
 def main():
     st.title("🗂 Kategoryzator transakcji + Raporty")
     cat = Categorizer()
@@ -106,11 +106,14 @@ def main():
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
-        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć."); return
+        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć.")
+        return
+
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
-        st.error(str(e)); return
+        st.error(str(e))
+        return
 
     cols = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.copy(); df.columns = cols
@@ -201,17 +204,15 @@ def main():
         return f"{abs(val):,.2f}".replace(",", " ").replace(".", ",")
 
     for _, row in total.iterrows():
-        cat = row['category']
+        cat_name = row['category']
         count = row['count']
         total_sum = fmt(row['sum'])
+        expander_label = f"<span style='font-size:18px'><strong>{cat_name}</strong></span> ({count}) – {total_sum}"
 
-        expander_label = f"{cat} ({count}) – {total_sum}"
+        subs = grouped[grouped['category'] == cat_name].copy()
+        subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
+
         with st.expander(expander_label, expanded=False):
-            st.markdown(f"<h4><strong>{cat}</strong> ({count}) – {total_sum}</h4>", unsafe_allow_html=True)
-
-            subs = grouped[grouped['category'] == cat].copy()
-            subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
-
             for _, sub in subs.iterrows():
                 sub_cat = sub['subcategory']
                 sub_count = sub['count']
