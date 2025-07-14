@@ -3,7 +3,10 @@ import io
 import streamlit as st
 from pathlib import Path
 from rapidfuzz import process, fuzz
-import git  # opcjonalnie, jeśli auto‑push
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+import git   # opcjonalnie, jeśli używasz auto‑push
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -26,8 +29,16 @@ CATEGORIES = {
 }
 ASSIGNMENTS_FILE = Path("assignments.csv")
 
+# --------------------------------------------------
+# 2) PRZYGOTUJ EMBEDDINGI DLA PAR KATEGORIA — PODKATEGORIA
+# --------------------------------------------------
+# Flattenujemy pary i ładujemy model
+CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
+EMBED_MODEL = SentenceTransformer('all-MiniLM-L6-v2')
+PAIR_EMBS = EMBED_MODEL.encode(CATEGORY_PAIRS, convert_to_numpy=True)
+
 # ------------------------------------
-# 2) KLASA DO ZARZĄDZANIA PRZYPISANIAMI
+# 3) KLASA DO ZARZĄDZANIA PRZYPISANIAMI
 # ------------------------------------
 class Categorizer:
     def __init__(self):
@@ -41,12 +52,20 @@ class Categorizer:
                 st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
 
     def suggest(self, key: str, amount: float):
+        # 1) Historia (jeśli kategoria już istnieje)
         if key in self.map and self.map[key][0]:
             return self.map[key]
-        if self.map:
-            best, score, _ = process.extractOne(key, list(self.map.keys()), scorer=fuzz.token_sort_ratio)
-            if score > 80:
-                return self.map[best]
+
+        # 2) Semantyczne dopasowanie embeddingowe
+        emb = EMBED_MODEL.encode([key], convert_to_numpy=True)
+        sims = cosine_similarity(emb, PAIR_EMBS)[0]
+        best_idx = int(np.argmax(sims))
+        best_score = sims[best_idx]
+        if best_score > 0.5:
+            cat, sub = CATEGORY_PAIRS[best_idx].split(" — ")
+            return (cat, sub)
+
+        # 3) Fallback: znak kwoty
         if amount >= 0:
             return ('Przychody', 'Inne')
         return None
@@ -61,7 +80,7 @@ class Categorizer:
         ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
 # -----------------------------------------------------
-# 3) OPCJONALNIE: AUTO‑PUSH DO GITHUB (GitPython + SECRETS)
+# 4) OPCJONALNIE: AUTO‑PUSH DO GITHUB (GitPython + SECRETS)
 # -----------------------------------------------------
 def auto_git_commit():
     token = st.secrets["GITHUB_TOKEN"]
@@ -79,7 +98,7 @@ def auto_git_commit():
         repo.remotes.origin.push()
 
 # ------------------------------------
-# 4) FUNKCJA WCZYTANIA CSV Z BANKU
+# 5) FUNKCJA WCZYTANIA CSV Z BANKU
 # ------------------------------------
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
@@ -94,23 +113,26 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
 # --------------------------
-# 5) GŁÓWNA FUNKCJA STREAMLIT
+# 6) GŁÓWNA FUNKCJA STREAMLIT
 # --------------------------
 def main():
-    st.title("🗂 Kategoryzator transakcji bankowych")
+    st.title("🗂 Kategoryzator transakcji bankowych (pełna automatyzacja)")
+
     cat = Categorizer()
 
     uploaded = st.file_uploader("Wybierz plik CSV z banku", type=["csv"])
     if not uploaded:
-        st.info("Wczytaj plik, aby rozpocząć.")
+        st.info("Wczytaj plik, by rozpocząć.")
         return
 
+    # 6.1) Parsowanie CSV
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
         st.error(str(e))
         return
 
+    # 6.2) Mapowanie kolumn
     df = df_raw.loc[:, df_raw.columns.notna()]
     df.columns = [c.strip() for c in df.columns]
     df.rename(columns={
@@ -123,30 +145,31 @@ def main():
     }, inplace=True)
     df = df[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']]
 
-    # 5.4) Przygotuj grupy
-    acct_numbers = df['Nr rachunku'].dropna().unique().tolist()
-    acct_groups = [df.index[df['Nr rachunku']==acct].tolist() for acct in acct_numbers]
+    # 6.3) Przygotuj grupy: rachunek lub opis
+    acct_nums = df['Nr rachunku'].dropna().unique().tolist()
+    acct_groups = [df.index[df['Nr rachunku']==acct].tolist() for acct in acct_nums]
     no_acct = df.index[df['Nr rachunku'].isna()].tolist()
     desc_groups = [[i] for i in no_acct]
     groups = acct_groups + desc_groups
 
-    # 5.5) Bulk‑assign
-    st.markdown("### Przypisz kategorię do każdej grupy")
+    # 6.4) Bulk‑assign
+    st.markdown("### Automatyczne przypisywanie kategorii (możesz poprawić ręcznie)")
     for idxs in groups:
         first = idxs[0]
         acct = df.loc[first, 'Nr rachunku']
         key = str(acct) if pd.notna(acct) else str(df.loc[first, 'Description'])
-        # pomiń tylko klucze ze znaną, niepustą kategorią
+        # pomiń tylko gdy mamy już niepustą kategorię
         if key in cat.map and cat.map[key][0]:
             continue
 
         descs = df.loc[idxs, 'Description'].unique().tolist()
         titles = df.loc[idxs, 'Tytuł'].unique().tolist()
         amount = df.loc[first, 'Amount']
+
         st.write(f"**Klucz:** {key}")
         st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
         st.write(f"- Tytuły: {', '.join(titles[:3])}{'...' if len(titles)>3 else ''}")
-        st.write(f"- Kwota przykład: {amount:.2f}")
+        st.write(f"- Kwota: {amount:.2f}")
 
         sugg = cat.suggest(key, amount) or ("","")
         sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
@@ -160,9 +183,9 @@ def main():
             cat.assign(key, sel_cat, sel_sub)
 
     st.markdown("---")
-    st.success("Grupy oznaczone – skoryguj ewentualnie pojedyncze wiersze.")
+    st.success("Grupy oznaczone – możesz korygować poniższą tabelę.")
 
-    # 5.6) Finalna tabela
+    # 6.5) Finalna tabela + keys_list
     keys_list = []
     for _, row in df.iterrows():
         acct = row['Nr rachunku']
@@ -189,7 +212,7 @@ def main():
         use_container_width=True
     )
 
-    # 5.7) Zapis + push
+    # 6.6) Zapis + opcjonalny push
     if st.button("💾 Zapisz i eksportuj"):
         for idx, row in enumerate(edited.itertuples(index=False)):
             key = keys_list[idx]
