@@ -219,11 +219,36 @@ def main():
         try: auto_git_commit(); st.success("Wysłano do GitHuba")
         except: st.warning("Push nieudany")
 
-    # --- 6.4) Podsumowanie liczby i sumy ---
-    st.markdown("## Raport: ilość i suma według kategorii")
-    report = final.groupby('category')['Amount'].agg(['count','sum']).reset_index()
-    report.rename(columns={'count':'Liczba','sum':'Suma'}, inplace=True)
-    st.dataframe(report, use_container_width=True)
+        # --- 6.4) Raport z podsumowaniem kategorii i podkategorii ---
+    st.markdown("## 📊 Raport: ilość i suma według kategorii")
+    
+    # Agregacja
+    grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
+    total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
+    
+    # Formatowanie
+    grouped['formatted'] = grouped.apply(
+        lambda r: f"{r['subcategory']} ({r['count']}) – {r['sum']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        axis=1
+    )
+    total['formatted'] = total.apply(
+        lambda r: f"{r['category']} ({r['count']}) – {r['sum']:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."),
+        axis=1
+    )
+    
+    # Sortowanie – Przychody zawsze na górze
+    total['sort'] = total['category'].apply(lambda x: 0 if x == 'Przychody' else 1)
+    total = total.sort_values(by=['sort', 'category'])
+    
+    # Wyświetlenie jako expandery
+    for _, row in total.iterrows():
+        cat = row['category']
+        st.markdown(f"### {row['formatted']}")
+        with st.expander("Szczegóły"):
+            subs = grouped[grouped['category'] == cat]
+            for _, r in subs.iterrows():
+                st.markdown(f"- {r['formatted']}")
+
 
     # --- 6.5) Wykres słupkowy sumy kwot ---
     st.markdown("## Wykres: suma wydatków/przychodów wg kategorii")
