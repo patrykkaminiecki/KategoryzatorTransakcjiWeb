@@ -199,7 +199,7 @@ def main():
     for i_group, idxs in enumerate(groups):
         first=idxs[0]
         nr_rachunku = str(df.loc[first, 'Nr rachunku']) if pd.notna(df.loc[first, 'Nr rachunku']) else ''
-        kontrahent = str(df.loc[first, 'Dane kontrahenta']) if 'Dane kontrahenta' in df.columns else ''
+        kontrahent = str(df.loc[first].get('Dane kontrahenta', ''))
         key = clean_desc(nr_rachunku + '|' + kontrahent)
         descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; kontrs=[str(x) for x in df.loc[idxs,'Dane kontrahenta'].unique()] if 'Dane kontrahenta' in df.columns else []
         amt=df.loc[first,'Amount']
@@ -289,7 +289,7 @@ def main():
         ], ignore_index=True)
         return grouped, total
     # Nowa logika: show_assign_form True jeśli są nieprzypisane klucze
-    keys_list = [clean_desc(str(r['Nr rachunku']) + '|' + str(r['Dane kontrahenta'])) for _, r in df.iterrows()]
+    keys_list = [clean_desc(str(r['Nr rachunku']) + '|' + str(r.get('Dane kontrahenta', ''))) for _, r in df.iterrows()]
     keys_list = [k for k in keys_list if k]
     unmapped = [k for k in keys_list if cat.map.get(clean_desc(k), ("", ""))[0] == "" or cat.map.get(clean_desc(k), ("", ""))[1] == ""]
     st.info(f'Nieprzypisane klucze: {[clean_desc(k) for k in unmapped]}' if unmapped else 'Wszystkie transakcje przypisane.')
