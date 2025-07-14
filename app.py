@@ -191,21 +191,21 @@ def main():
     groups = acct_groups+desc_groups
 
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
-    for idxs in groups:
+    for i_group, idxs in enumerate(groups):
         first=idxs[0]
         acct=df.loc[first,'Nr rachunku']; key=str(acct) if pd.notna(acct) else str(df.loc[first,'Description'])
         if key in cat.map and cat.map[key][0]: continue
         descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; titles=[str(x) for x in df.loc[idxs,'Tytuł'].unique()]
         amt=df.loc[first,'Amount']
-        st.write(f"**{key}** – {amt:.2f} PLN")
+        st.write(f"**{key}** – {amt:.2f}\xa0PLN")
         st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
         sugg=cat.suggest(key,amt) or ("","")
         sel_cat=st.selectbox("Kategoria", list(CATEGORIES.keys()),
                              index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
-                             key=f"cat_{key}")
+                             key=f"cat_{key}_{i_group}")
         sel_sub=st.selectbox("Podkategoria", CATEGORIES[sel_cat],
                              index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
-                             key=f"sub_{key}")
+                             key=f"sub_{key}_{i_group}")
         for i in idxs: cat.assign(key,sel_cat,sel_sub)
 
     st.markdown("---")
