@@ -198,13 +198,15 @@ def main():
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
     for i_group, idxs in enumerate(groups):
         first=idxs[0]
-        desc = str(df.loc[first, 'Description'])
-        tit = str(df.loc[first, 'Tytuł']) if 'Tytuł' in df.columns else ''
-        key = clean_desc(desc + '|' + tit)
-        descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; titles=[str(x) for x in df.loc[idxs,'Tytuł'].unique()]
+        nr_rachunku = str(df.loc[first, 'Nr rachunku']) if pd.notna(df.loc[first, 'Nr rachunku']) else ''
+        kontrahent = str(df.loc[first, 'Dane kontrahenta']) if 'Dane kontrahenta' in df.columns else ''
+        key = clean_desc(nr_rachunku + '|' + kontrahent)
+        descs=[str(x) for x in df.loc[idxs,'Description'].unique()]; kontrs=[str(x) for x in df.loc[idxs,'Dane kontrahenta'].unique()] if 'Dane kontrahenta' in df.columns else []
         amt=df.loc[first,'Amount']
-        st.write(f"**{desc} | {tit}** – {amt:.2f}\xa0PLN")
+        st.write(f"**{nr_rachunku} | {kontrahent}** – {amt:.2f}\xa0PLN")
         st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
+        if kontrs:
+            st.write(f"- Kontrahenci: {', '.join(kontrs[:3])}{'...' if len(kontrs)>3 else ''}")
         sugg=cat.suggest(key,amt) or ("","")
         sel_cat=st.selectbox("Kategoria", list(CATEGORIES.keys()),
                              index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
@@ -287,7 +289,7 @@ def main():
         ], ignore_index=True)
         return grouped, total
     # Nowa logika: show_assign_form True jeśli są nieprzypisane klucze
-    keys_list = [clean_desc(str(r['Description']) + '|' + str(r['Tytuł'])) for _, r in df.iterrows()]
+    keys_list = [clean_desc(str(r['Nr rachunku']) + '|' + str(r['Dane kontrahenta'])) for _, r in df.iterrows()]
     keys_list = [k for k in keys_list if k]
     unmapped = [k for k in keys_list if cat.map.get(clean_desc(k), ("", ""))[0] == "" or cat.map.get(clean_desc(k), ("", ""))[1] == ""]
     st.info(f'Nieprzypisane klucze: {[clean_desc(k) for k in unmapped]}' if unmapped else 'Wszystkie transakcje przypisane.')
