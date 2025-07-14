@@ -277,13 +277,8 @@ def main():
             total[total['category'] != 'Przychody'].sort_values('category')
         ], ignore_index=True)
         return grouped, total
-    st.write('Kategorie w final:', final['category'].unique())
-    st.write('Podkategorie w final:', final['subcategory'].unique())
-    st.write('FLOWBIRD w Description:', final[final['Description'].str.contains('FLOWBIRD', case=False, na=False)])
-    st.write('Transport z Amount!=0:', final[(final['category'] == 'Transport') & (final['Amount'] != 0)])
-    # Pokaż agregację grouped przed filtrowaniem
-    grouped_raw = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
-    st.write('Agregacja grouped (przed filtrem count>0):', grouped_raw)
+    # Ukryj formularz przypisywania kategorii jeśli wszystkie transakcje mają kategorię i podkategorię
+    show_assign_form = not (final['category'].notna() & (final['category'] != '') & final['subcategory'].notna() & (final['subcategory'] != '')).all()
     grouped, total = get_report_tables(final)
 
     for _, row in total.iterrows():
