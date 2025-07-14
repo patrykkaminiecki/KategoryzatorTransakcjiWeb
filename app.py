@@ -36,7 +36,11 @@ CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub
 
 @st.cache_resource(show_spinner=False)
 def get_embed_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    try:
+        return SentenceTransformer('all-MiniLM-L6-v2')
+    except Exception as e:
+        st.error('Nie udało się pobrać modelu embeddingów (np. limit pobrań HuggingFace, błąd HTTP 429).\nSpróbuj później lub pobierz model ręcznie.\nSzczegóły: ' + str(e))
+        raise
 
 @st.cache_data(show_spinner=False)
 def get_pair_embs():
@@ -270,7 +274,9 @@ def main():
         cat = row['category']
         sum_text = format_amount(row['sum'])
         label = f"{cat} ({row['count']}) – {sum_text}"
-        subs = grouped[(grouped['category'] == cat) & (grouped['subcategory'] != cat)]
+        subs = grouped[grouped['category'] == cat].copy()
+        # Zamień NaN/puste podkategorie na 'brak podkategorii'
+        subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
         if not subs.empty:
             with st.expander(label, expanded=False):
                 for _, sub in subs.iterrows():
