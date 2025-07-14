@@ -16,14 +16,14 @@ CATEGORIES = {
     'Rachunki': ['Prąd', 'Gaz', 'Woda', 'Odpady', 'Internet', 'Telefon',
                  'Subskrypcje', 'Przedszkole', 'Żłobek', 'Podatki'],
     'Transport': ['Paliwo', 'Ubezpieczenie', 'Parking', 'Przeglądy'],
-    'Kredyty': ['Hipoteka', 'Samochód', 'TV+Dyson'],
+    'Kredyty': ['Hipoteka', 'Samochód', 'TV+Dyson', 'Gmina Kolbudy'],
     'Jedzenie': ['Zakupy Spożywcze'],
     'Zdrowie': ['Apteka', 'Lekarz', 'Kosmetyki', 'Fryzjer'],
     'Odzież': ['Ubrania', 'Buty'],
     'Dom i Ogród': ['Dom', 'Ogród', 'Zwierzęta'],
     'Inne': ['Prezenty', 'Rozrywka', 'Hobby', 'Edukacja'],
-    'Oszczędności': ['Poduszka bezpieczeństwa', 'Fundusz celowy', 'Inwestycje'],
-    'Nadpłata Długów': ['Hipoteka', 'Samochód', 'TV+Dyson'],
+    'Oszczędności': ['Poduszka bezpieczeństwa', 'Fundusz celowy', 'Inwestycje', 'Wypłata z oszczędności'],
+    'Nadpłata Długów': ['Hipoteka', 'Samochód', 'TV+Dyson', 'Gmina Kolbudy'],
     'Wakacje': ['Wakacje'],
     'Gotówka': ['Wpłata', 'Wypłata']
 }
@@ -54,7 +54,6 @@ class Categorizer:
         # 1) Historia
         if key in self.map and self.map[key][0]:
             return self.map[key]
-
         # 2) Embedding + cosine_similarity
         emb = EMBED_MODEL.encode([key], convert_to_numpy=True)
         sims = cosine_similarity(emb, PAIR_EMBS)[0]
@@ -63,7 +62,6 @@ class Categorizer:
         if best_score > 0.5:
             cat, sub = CATEGORY_PAIRS[best_idx].split(" — ")
             return (cat, sub)
-
         # 3) Fallback wg znaku kwoty
         if amount >= 0:
             return ('Przychody', 'Inne')
@@ -137,12 +135,12 @@ def main():
     df = df_raw.loc[:, df_raw.columns.notna()]
     df.columns = [c.strip() for c in df.columns]
     df.rename(columns={
-        'Data transakcji':'Date',
-        'Dane kontrahenta':'Description',
-        'Tytuł':'Tytuł',
-        'Nr rachunku':'Nr rachunku',
-        'Kwota transakcji (waluta rachunku)':'Amount',
-        'Kwota blokady/zwolnienie blokady':'Kwota blokady'
+        'Data transakcji': 'Date',
+        'Dane kontrahenta': 'Description',
+        'Tytuł': 'Tytuł',
+        'Nr rachunku': 'Nr rachunku',
+        'Kwota transakcji (waluta rachunku)': 'Amount',
+        'Kwota blokady/zwolnienie blokady': 'Kwota blokady'
     }, inplace=True)
     df = df[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']]
 
@@ -160,13 +158,11 @@ def main():
         acct = df.loc[first,'Nr rachunku']
         key = str(acct) if pd.notna(acct) else str(df.loc[first,'Description'])
 
-        # pomiń jeśli mamy już niepustą kategorię
         if key in cat.map and cat.map[key][0]:
             continue
 
-        # wymuś stringi do join
         descs = [str(x) for x in df.loc[idxs,'Description'].unique()]
-        titles= [str(x) for x in df.loc[idxs,'Tytuł'].unique()]
+        titles = [str(x) for x in df.loc[idxs,'Tytuł'].unique()]
         amount = df.loc[first,'Amount']
 
         st.write(f"**Klucz:** {key}")
@@ -195,8 +191,8 @@ def main():
         key = str(acct) if pd.notna(acct) else str(row['Description'])
         keys_list.append(key)
 
-    df['category'] = [cat.map.get(k,("", ""))[0] for k in keys_list]
-    df['subcategory'] = [cat.map.get(k,("", ""))[1] for k in keys_list]
+    df['category']   = [cat.map.get(k,("", ""))[0] for k in keys_list]
+    df['subcategory']= [cat.map.get(k,("", ""))[1] for k in keys_list]
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
     edited = st.data_editor(
@@ -217,9 +213,9 @@ def main():
 
     # 6.6) Zapis + opcjonalny push
     if st.button("💾 Zapisz i eksportuj"):
-        for idx,row in enumerate(edited.itertuples(index=False)):
+        for idx, row in enumerate(edited.itertuples(index=False)):
             key = keys_list[idx]
-            cat.assign(key,row.category,row.subcategory)
+            cat.assign(key, row.category, row.subcategory)
         cat.save()
         st.success("Zapisano assignments.csv")
         try:
