@@ -268,7 +268,9 @@ def main():
             total[total['category'] != 'Przychody'].sort_values('category')
         ], ignore_index=True)
         return grouped, total
-    st.write(final[final['category'] == 'Transport'])
+    st.write('Kategorie w final:', final['category'].unique())
+    st.write('Podkategorie w final:', final['subcategory'].unique())
+    st.write('FLOWBIRD w Description:', final[final['Description'].str.contains('FLOWBIRD', case=False, na=False)])
     grouped, total = get_report_tables(final)
 
     for _, row in total.iterrows():
