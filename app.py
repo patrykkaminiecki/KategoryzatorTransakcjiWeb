@@ -210,6 +210,8 @@ def main():
     for _, r in total.iterrows():
         label = f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"
         with st.expander(label):
+            # nagłówek kategorii większą czcionką i pogrubiony
+            st.markdown(f"## **{label}**")
             subs = grouped[(grouped['category']==r['category']) &
                            (grouped['subcategory']!=r['category'])]
             for _, s in subs.iterrows():
