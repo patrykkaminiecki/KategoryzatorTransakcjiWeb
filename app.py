@@ -219,47 +219,32 @@ def main():
         try: auto_git_commit(); st.success("Wysłano do GitHuba")
         except: st.warning("Push nieudany")
 
-                # --- 6.4) Raport z podsumowaniem kategorii i podkategorii ---
+    # --- 6.4) Raport i wykres ---
     st.markdown("## 📊 Raport: ilość i suma według kategorii")
-    
-    # Agregacja
-    grouped = final.groupby(['category', 'subcategory'])['Amount'].agg(['count', 'sum']).reset_index()
-    total = grouped.groupby('category').agg({'count': 'sum', 'sum': 'sum'}).reset_index()
-    
-    # Format liczbowy: 13 452,17
+
     def format_amount(val):
-        return f"{val:,.2f}".replace(",", "X").replace(".", ",").replace("X", " ").replace("\u202f", " ")
-    
-    grouped['formatted'] = grouped.apply(
-        lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}",
-        axis=1
-    )
-    total['formatted'] = total.apply(
-        lambda r: f"<span style='font-size:18px'><strong>{r['category']}</strong> ({r['count']}) – {format_amount(r['sum'])}</span>",
-        axis=1
-    )
-    
-    # Sortowanie – Przychody zawsze na górze
-    total['sort'] = total['category'].apply(lambda x: 0 if x == 'Przychody' else 1)
-    total = total.sort_values(by=['sort', 'category'])
-    
-       # Expandery
+        return f"{val:,.2f}".replace(",", " ").replace(".","‚").replace("‚", ",")
+
+    grouped = final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
+    grouped['formatted'] = grouped.apply(lambda r: f"{r['subcategory']} ({r['count']}) – {format_amount(r['sum'])}", axis=1)
+
+    total = grouped.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
+    total['formatted'] = total.apply(lambda r: f"**<span style='font-size: 20px;'>{r['category']}</span> ({r['count']}) – {format_amount(r['sum'])}**", axis=1)
+
+    # Kategoria "Przychody" na górze
+    total = pd.concat([
+        total[total['category'] == 'Przychody'],
+        total[total['category'] != 'Przychody'].sort_values('category')
+    ])
+
     for _, row in total.iterrows():
         cat = row['category']
-        with st.expander(label=cat):
+        with st.expander(label=row['category']):
             st.markdown(row['formatted'], unsafe_allow_html=True)
             subs = grouped[grouped['category'] == cat]
             for _, r in subs.iterrows():
                 st.markdown(f"- {r['formatted']}")
 
-
-
-
-
-    # --- 6.5) Wykres słupkowy sumy kwot ---
-    st.markdown("## Wykres: suma wydatków/przychodów wg kategorii")
-    chart = report.set_index('category')['Suma']
-    st.bar_chart(chart)
 
 if __name__=="__main__":
     main()
