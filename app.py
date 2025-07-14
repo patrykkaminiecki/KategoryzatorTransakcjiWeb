@@ -243,14 +243,15 @@ def main():
     total['sort'] = total['category'].apply(lambda x: 0 if x == 'Przychody' else 1)
     total = total.sort_values(by=['sort', 'category'])
     
-    # Expandery
+       # Expandery
     for _, row in total.iterrows():
         cat = row['category']
-        with st.expander(label=None):
+        with st.expander(label=cat):
             st.markdown(row['formatted'], unsafe_allow_html=True)
             subs = grouped[grouped['category'] == cat]
             for _, r in subs.iterrows():
                 st.markdown(f"- {r['formatted']}")
+
 
 
 
