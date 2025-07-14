@@ -207,7 +207,7 @@ def main():
         cat_name = row['category']
         count = row['count']
         total_sum = fmt(row['sum'])
-        expander_label = f"<span style='font-size:18px'><strong>{cat_name}</strong></span> ({count}) – {total_sum}"
+        expander_label = f"{cat_name} ({count}) – {total_sum}"
 
         subs = grouped[grouped['category'] == cat_name].copy()
         subs['subcategory'] = subs['subcategory'].fillna('').replace('', 'brak podkategorii')
