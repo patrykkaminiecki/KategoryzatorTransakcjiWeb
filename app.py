@@ -4,7 +4,6 @@ import streamlit as st
 from pathlib import Path
 from rapidfuzz import process, fuzz
 import git     # tylko jeśli używasz auto‑push
-import os
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -38,7 +37,7 @@ class Categorizer:
             try:
                 df = pd.read_csv(ASSIGNMENTS_FILE)
                 for _, row in df.iterrows():
-                    key = row['description']
+                    key = str(row['description'])
                     self.map[key] = (row['category'], row['subcategory'])
             except Exception:
                 st.warning("Plik assignments.csv istnieje, ale jest uszkodzony lub pusty.")
@@ -119,7 +118,6 @@ def main():
         st.error(str(e))
         return
 
-    # Mapowanie i przycięcie
     df_raw = df_raw.loc[:, df_raw.columns.notna()]
     df_raw.columns = [c.strip() for c in df_raw.columns]
     df_raw.rename(columns={
@@ -141,18 +139,17 @@ def main():
     # 5.5) Bulk‐assign dla każdej grupy
     st.markdown("### Przypisz kategorię do każdej grupy transakcji (po rachunku)")
     for idxs in groups:
-        acct = df.loc[idxs[0], 'Nr rachunku']
-        key = str(acct)
-        if key in cat.map:
+        acct = str(df.loc[idxs[0], 'Nr rachunku'])
+        if acct in cat.map:
             continue
 
         descs = df.loc[idxs, 'Description'].unique().tolist()
         titles = df.loc[idxs, 'Tytuł'].unique().tolist()
         st.write(f"**Rachunek:** {acct}")
-        st.write(f"- Przykładowe opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
-        st.write(f"- Przykładowe tytuły: {', '.join(titles[:3])}{'...' if len(titles)>3 else ''}")
+        st.write(f"- Opisy: {', '.join(descs[:3])}{'...' if len(descs)>3 else ''}")
+        st.write(f"- Tytuły: {', '.join(titles[:3])}{'...' if len(titles)>3 else ''}")
 
-        sugg = cat.suggest(key) or ("","")
+        sugg = cat.suggest(acct) or ("","")
         sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
                                index=list(CATEGORIES.keys()).index(sugg[0]) if sugg[0] in CATEGORIES else 0,
                                key=f"cat_{acct}")
@@ -160,16 +157,16 @@ def main():
                                index=CATEGORIES[sel_cat].index(sugg[1]) if sugg[1] in CATEGORIES.get(sel_cat,[]) else 0,
                                key=f"sub_{acct}")
 
-        for idx in idxs:
-            cat.assign(key, sel_cat, sel_sub)
+        cat.assign(acct, sel_cat, sel_sub)
 
     st.markdown("---")
     st.success("Grupy oznaczone – możesz teraz skorygować pojedyncze transakcje.")
 
-    # 5.6) Finalna tabela (bez Nr rachunku)
-    df['category'] = df['Nr rachunku'].astype(str).apply(lambda k: cat.map.get(k,('',''))[0])
-    df['subcategory'] = df['Nr rachunku'].astype(str).apply(lambda k: cat.map.get(k,('',''))[1])
-    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
+    # 5.6) Finalna tabela (dodajemy ukrytą kolumnę _key)
+    df['_key'] = df['Nr rachunku'].astype(str)
+    df['category'] = df['_key'].apply(lambda k: cat.map.get(k,('',''))[0])
+    df['subcategory'] = df['_key'].apply(lambda k: cat.map.get(k,('',''))[1])
+    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory','_key']]
 
     edited = st.data_editor(
         final,
@@ -181,7 +178,8 @@ def main():
             'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn("Podkategoria",
-                                 options=[s for subs in CATEGORIES.values() for s in subs])
+                                 options=[s for subs in CATEGORIES.values() for s in subs]),
+            '_key': st.column_config.Column("Klucz", visible=False)
         },
         hide_index=True,
         use_container_width=True
@@ -191,9 +189,8 @@ def main():
     if st.button("💾 Zapisz i wyeksportuj"):
         # Aktualizacja mapy z edycji
         for _, row in edited.iterrows():
-            acct = df.loc[df['Description']==row['Description'], 'Nr rachunku'].iloc[0]
-            key = str(acct)
-            cat.assign(key, row['category'], row['subcategory'])
+            k = row['_key']
+            cat.assign(k, row['category'], row['subcategory'])
         cat.save()
         st.success("Zapisano assignments.csv")
 
@@ -203,7 +200,7 @@ def main():
         except Exception as e:
             st.warning(f"Push nieudany: {e}")
 
-        out = edited.to_csv(index=False).encode('utf-8')
+        out = edited.drop(columns=['_key']).to_csv(index=False).encode('utf-8')
         st.download_button("⬇️ Pobierz wynikowy CSV", data=out, file_name="wynik.csv")
 
 if __name__ == "__main__":
