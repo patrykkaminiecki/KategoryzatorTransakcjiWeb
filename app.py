@@ -227,41 +227,49 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-        # Przygotuj DataFrame z total (wynik z get_report_tables)
+         # ---- przygotowanie DF ----
     chart_df = total.copy()
-    
-    # Ustal kolejność kategorii: 'Przychody' najpierw, potem reszta A–Z
     others = sorted([c for c in chart_df['category'] if c != 'Przychody'])
     order = ['Przychody'] + others
     
-    color_cond = alt.condition(
-        alt.datum.category == 'Przychody',
-        alt.value("green"),
-        alt.value("red")
-    )
-    
-    base = (
+    # ---- warstwa słupków ----
+    bars = (
         alt.Chart(chart_df)
+           .mark_bar()
            .encode(
                x=alt.X("category:N", sort=order, axis=None),
                y=alt.Y("sum:Q", axis=None),
-               color=color_cond
+               color=alt.condition(
+                   alt.datum.category == 'Przychody',
+                   alt.value("green"),
+                   alt.value("red")
+               )
            )
     )
     
-    bars = base.mark_bar()
-    
-    labels = base.mark_text(
-        align='center',
-        baseline='middle',
-        dy=0,
-        color="white",
-        fontWeight="bold"
-    ).encode(
-        text=alt.Text("sum:Q", format=",.2f")
+    # ---- warstwa etykiet ----
+    labels = (
+        alt.Chart(chart_df)
+           .mark_text(
+               align='center',
+               baseline='middle',
+               color='white',
+               fontWeight='bold'
+           )
+           .encode(
+               x=alt.X("category:N", sort=order),
+               # stack="zero" umieszcza tekst wewnątrz słupka
+               y=alt.Y("sum:Q", stack='zero'),
+               text=alt.Text("sum:Q", format=",.2f")
+           )
     )
     
-    chart = (bars + labels).properties(width="container", height=400)
+    # ---- finalny wykres ----
+    chart = (
+        alt.layer(bars, labels)
+           .properties(width='container', height=400)
+    )
+    
     st.altair_chart(chart, use_container_width=True)
 
 if __name__ == "__main__":
