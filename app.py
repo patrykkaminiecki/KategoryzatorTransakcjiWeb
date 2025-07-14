@@ -227,12 +227,19 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-         # ---- przygotowanie DF ----
+  # … po wcześniejszym wyciągnięciu `total` …
+
+    # Przygotuj DF
     chart_df = total.copy()
+    
+    # Ustal kolejność kategorii: Przychody na początku, reszta A–Z
     others = sorted([c for c in chart_df['category'] if c != 'Przychody'])
     order = ['Przychody'] + others
     
-    # ---- warstwa słupków ----
+    # Dodajemy kolumnę mid = połowa wartości sumy, do pozycjonowania etykiet
+    chart_df['mid'] = chart_df['sum'] / 2
+    
+    # Warstwa słupków, kolor według znaku sumy (>=0 zielony, <0 czerwony)
     bars = (
         alt.Chart(chart_df)
            .mark_bar()
@@ -240,14 +247,14 @@ def main():
                x=alt.X("category:N", sort=order, axis=None),
                y=alt.Y("sum:Q", axis=None),
                color=alt.condition(
-                   alt.datum.category == 'Przychody',
+                   alt.datum.sum >= 0,
                    alt.value("green"),
                    alt.value("red")
                )
            )
     )
     
-    # ---- warstwa etykiet ----
+    # Warstwa etykiet: białe, pogrubione, wyśrodkowane wewnątrz słupka
     labels = (
         alt.Chart(chart_df)
            .mark_text(
@@ -258,13 +265,11 @@ def main():
            )
            .encode(
                x=alt.X("category:N", sort=order),
-               # stack="zero" umieszcza tekst wewnątrz słupka
-               y=alt.Y("sum:Q", stack='zero'),
+               y=alt.Y("mid:Q", axis=None),
                text=alt.Text("sum:Q", format=",.2f")
            )
     )
     
-    # ---- finalny wykres ----
     chart = (
         alt.layer(bars, labels)
            .properties(width='container', height=400)
