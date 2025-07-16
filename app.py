@@ -227,69 +227,66 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-    # --- Dane ---
+        # Przygotowanie danych
     sub_df = grouped.copy()
     total_df = total.copy()
-    others = sorted([c for c in total_df['category'] if c != 'Przychody'])
-    order = ['Przychody'] + others
-    total_df['mid'] = total_df['sum'] / 2
     
-    x_enc = alt.X('category:N', sort=order, axis=None, title=None)
+    # Lista kategorii z Przychody na początku
+    order = ['Przychody'] + sorted([c for c in total_df['category'].unique() if c != 'Przychody'])
+    sub_df['sum'] = sub_df['sum'].fillna(0)
+    total_df['sum'] = total_df['sum'].fillna(0)
+    total_df['mid'] = total_df['sum'] / 2  # do etykiet w środku słupka
     
-    # --- Słupki przychodów ---
+    # Słupki: przychody
     bars_income = (
-        alt.Chart(sub_df)
-           .transform_filter(alt.datum.category == 'Przychody')
-           .mark_bar()
-           .encode(
-               x=x_enc,
-               y=alt.Y('sum:Q', stack='zero', axis=None, title=None),
-               color=alt.Color('subcategory:N',
-                               scale=alt.Scale(scheme='greens'),
-                               legend=alt.Legend(title="Przychody — podkategoria")),
-               order=alt.Order('subcategory:N'),
-               tooltip=[
-                   alt.Tooltip('subcategory:N', title='Podkategoria'),
-                   alt.Tooltip('sum:Q', title='Suma', format=",.2f")
-               ]
-           )
+        alt.Chart(sub_df[sub_df['category'] == 'Przychody'])
+        .mark_bar()
+        .encode(
+            x=alt.X('category:N', sort=order, title=None, axis=None),
+            y=alt.Y('sum:Q', stack='zero', title=None),
+            color=alt.Color('subcategory:N',
+                            scale=alt.Scale(scheme='greens'),
+                            legend=alt.Legend(title="Przychody")),
+            tooltip=[
+                alt.Tooltip('subcategory:N', title='Podkategoria'),
+                alt.Tooltip('sum:Q', title='Suma', format=",.2f")
+            ]
+        )
     )
     
-    # --- Słupki wydatków ---
+    # Słupki: wydatki
     bars_expense = (
-        alt.Chart(sub_df)
-           .transform_filter(alt.datum.category != 'Przychody')
-           .mark_bar()
-           .encode(
-               x=x_enc,
-               y=alt.Y('sum:Q', stack='zero'),
-               color=alt.Color('subcategory:N',
-                               scale=alt.Scale(scheme='reds'),
-                               legend=alt.Legend(title="Wydatki — podkategoria")),
-               order=alt.Order('subcategory:N'),
-               tooltip=[
-                   alt.Tooltip('subcategory:N', title='Podkategoria'),
-                   alt.Tooltip('sum:Q', title='Suma', format=",.2f")
-               ]
-           )
+        alt.Chart(sub_df[sub_df['category'] != 'Przychody'])
+        .mark_bar()
+        .encode(
+            x=alt.X('category:N', sort=order, title=None, axis=None),
+            y=alt.Y('sum:Q', stack='zero', title=None),
+            color=alt.Color('subcategory:N',
+                            scale=alt.Scale(scheme='reds'),
+                            legend=alt.Legend(title="Wydatki")),
+            tooltip=[
+                alt.Tooltip('subcategory:N', title='Podkategoria'),
+                alt.Tooltip('sum:Q', title='Suma', format=",.2f")
+            ]
+        )
     )
     
-    # --- Etykiety sumy całkowitej wewnątrz ---
+    # Etykiety: białe, wewnątrz słupków
     labels = (
         alt.Chart(total_df)
-           .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
-           .encode(
-               x=x_enc,
-               y=alt.Y('mid:Q', axis=None),
-               text=alt.Text('sum:Q', format=",.2f")
-           )
+        .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
+        .encode(
+            x=alt.X('category:N', sort=order),
+            y=alt.Y('mid:Q'),
+            text=alt.Text('sum:Q', format=",.2f")
+        )
     )
     
-    # --- Łączenie i rozdzielenie skal kolorów ---
+    # Połączenie wykresów
     chart = (
         alt.layer(bars_income, bars_expense, labels)
-           .resolve_scale(color='independent')
-           .properties(width='container', height=400)
+        .resolve_scale(color='independent')  # osobna skala kolorów dla przychodów i wydatków
+        .properties(width='container', height=400)
     )
     
     st.altair_chart(chart, use_container_width=True)
