@@ -227,63 +227,89 @@ def main():
     # -------------------------
     st.markdown("## 📈 Wykres: suma według kategorii")
     
-    grouped['abs_sum'] = grouped['sum'].abs()
-    
-    category_totals = grouped.groupby('category', as_index=False)['sum'].sum()
-    category_totals['formatted_sum'] = category_totals['sum'].abs().map(lambda x: f"{x:,.0f}".replace(",", " ").replace(".", ","))
-    category_totals['color'] = category_totals['category'].apply(lambda c: 'green' if c == 'Przychody' else 'crimson')
-    category_totals['label'] = category_totals['formatted_sum']
-    
-    selection = alt.selection_single(fields=['category'], empty='none')
-    
-    cat_chart = alt.Chart(category_totals).mark_bar().encode(
-        x=alt.X('category:N', sort=['Przychody'] + sorted(category_totals[category_totals['category'] != 'Przychody']['category'].tolist())),
+    # Uporządkowanie danych
+order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
+grouped['sum'] = grouped['sum'].fillna(0)
+total['sum'] = total['sum'].fillna(0)
+total['mid'] = total['sum'] / 2
+
+# Wybór kategorii do drilldown
+selected_category = st.selectbox("🔍 Wybierz kategorię, aby zobaczyć podkategorie", ["(brak)", *order])
+
+# GŁÓWNY WYKRES – KATEGORIE
+bars = (
+    alt.Chart(total)
+    .mark_bar()
+    .encode(
+        x=alt.X('category:N', sort=order, title=None, axis=None),
         y=alt.Y('sum:Q', title=None),
-        color=alt.Color('color:N', scale=None, legend=None),
-        tooltip=[alt.Tooltip('category:N', title='Kategoria'),
-                 alt.Tooltip('sum:Q', title='Suma', format=",.2f")]
-    ).add_selection(
-        selection
-    ).properties(width=700, height=300, title="📊 Kategorie (kliknij, aby zobaczyć podkategorie)")
-    
-    text = alt.Chart(category_totals).mark_text(
-        align='center',
-        baseline='middle',
-        fontSize=13,
-        fontWeight='bold',
-        color='white'
-    ).encode(
-        x=alt.X('category:N', sort=['Przychody'] + sorted(category_totals[category_totals['category'] != 'Przychody']['category'].tolist())),
-        y=alt.Y('sum:Q'),
-        text='label:N'
+        color=alt.condition(
+            alt.datum.category == 'Przychody',
+            alt.value("#2ca02c"),  # zielony
+            alt.value("#d62728")   # czerwony
+        ),
+        tooltip=[
+            alt.Tooltip('category:N', title='Kategoria'),
+            alt.Tooltip('sum:Q', title='Suma', format=",.2f")
+        ]
     )
-    
-    cat_combined = (cat_chart + text).interactive()
-    
-    # Podkategorie
-    sub_data = grouped.copy()
-    sub_data['scheme'] = sub_data['category'].apply(lambda c: 'greens' if c == 'Przychody' else 'reds')
-    
-    green = sub_data[sub_data['scheme'] == 'greens']
-    red = sub_data[sub_data['scheme'] == 'reds']
-    
-    green_chart = alt.Chart(green).transform_filter(selection).mark_bar().encode(
-        x=alt.X('subcategory:N', sort='-y', title=None),
-        y=alt.Y('sum:Q', title=None),
-        color=alt.Color('subcategory:N', scale=alt.Scale(scheme='greens'), legend=None),
-        tooltip=[alt.Tooltip('subcategory:N'), alt.Tooltip('sum:Q', format=",.2f")]
-    ).properties(width=700, height=250)
-    
-    red_chart = alt.Chart(red).transform_filter(selection).mark_bar().encode(
-        x=alt.X('subcategory:N', sort='-y', title=None),
-        y=alt.Y('sum:Q', title=None),
-        color=alt.Color('subcategory:N', scale=alt.Scale(scheme='reds'), legend=None),
-        tooltip=[alt.Tooltip('subcategory:N'), alt.Tooltip('sum:Q', format=",.2f")]
-    ).properties(width=700, height=250)
-    
-    sub_chart = (green_chart + red_chart).properties(title="📍 Podkategorie")
-    
-    st.markdown("---")
-    st.altair_chart(cat_combined & sub_chart, use_container_width=True)
+)
+
+labels = (
+    alt.Chart(total)
+    .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
+    .encode(
+        x=alt.X('category:N', sort=order),
+        y=alt.Y('mid:Q'),
+        text=alt.Text('sum:Q', format=",.2f")
+    )
+)
+
+chart_main = (
+    alt.layer(bars, labels)
+    .properties(width='container', height=400)
+)
+
+st.altair_chart(chart_main, use_container_width=True)
+
+# WYKRES SZCZEGÓŁOWY – PODKATEGORIE
+if selected_category != "(brak)":
+    sub = grouped[grouped['category'] == selected_category].copy()
+    sub['subcategory'] = sub['subcategory'].fillna('brak')
+    sub['sum'] = sub['sum'].fillna(0)
+    sub = sub.sort_values('sum', ascending=False)
+    sub['mid'] = sub['sum'].cumsum() - sub['sum'] / 2
+
+    color_scheme = 'greens' if selected_category == 'Przychody' else 'reds'
+
+    bars_sub = (
+        alt.Chart(sub)
+        .mark_bar()
+        .encode(
+            x=alt.X('subcategory:N', sort=sub['subcategory'].tolist(), title=None, axis=None),
+            y=alt.Y('sum:Q', title=None),
+            color=alt.Color('subcategory:N', scale=alt.Scale(scheme=color_scheme), legend=None),
+            tooltip=[
+                alt.Tooltip('subcategory:N', title='Podkategoria'),
+                alt.Tooltip('sum:Q', title='Suma', format=",.2f")
+            ]
+        )
+    )
+
+    labels_sub = (
+        alt.Chart(sub)
+        .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
+        .encode(
+            x=alt.X('subcategory:N', sort=sub['subcategory'].tolist()),
+            y=alt.Y('mid:Q'),
+            text=alt.Text('sum:Q', format=",.2f")
+        )
+    )
+
+    st.markdown(f"### 🔍 Szczegóły: {selected_category}")
+    st.altair_chart(
+        alt.layer(bars_sub, labels_sub).properties(width='container', height=400),
+        use_container_width=True
+    )
 if __name__ == "__main__":
     main()
