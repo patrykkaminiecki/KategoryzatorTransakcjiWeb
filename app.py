@@ -245,7 +245,7 @@ def main():
 
     from streamlit_plotly_events import plotly_events
 
-    # Wykres kategorii
+    # Wykres kategorii - pionowe słupki, formatowanie jak w podkategoriach
     fig_cat = go.Figure()
     fig_cat.add_trace(go.Bar(
         x=total_sorted['category'],
@@ -255,12 +255,23 @@ def main():
         textposition='inside',
         insidetextanchor='middle',
         hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
+        width=0.6,
+        orientation='v',
     ))
     fig_cat.update_layout(
         height=400,
         margin=dict(l=10, r=10, t=30, b=30),
-        xaxis_title=None, yaxis_title=None,
-        showlegend=False
+        xaxis_title=None,
+        yaxis_title=None,
+        showlegend=False,
+        xaxis=dict(
+            tickmode='array',
+            tickvals=total_sorted['category'],
+            ticktext=total_sorted['category'],
+            tickangle=0
+        ),
+        plot_bgcolor='white',
+        bargap=0.2
     )
 
     # Wyświetl wykres i obsłuż kliknięcie
