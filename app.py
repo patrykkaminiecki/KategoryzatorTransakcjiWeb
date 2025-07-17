@@ -253,10 +253,118 @@ def main():
     col1, col2 = st.columns(2, gap="large")
     with col1:
         st.markdown("#### Suma według kategorii")
-        st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False}, key="cat_chart")
+        # Tworzenie wykresu kategorii
+        bar_text = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']]
+        fig_cat = go.Figure()
+        fig_cat.add_trace(go.Bar(
+            x=total_sorted['category'],
+            y=total_sorted['sum'],
+            marker_color=colors,
+            text=bar_text,
+            textposition='inside',
+            insidetextanchor='middle',
+            textfont=dict(color='white', size=18, family='Arial Black'),
+            hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
+            width=0.6,
+            orientation='v',
+        ))
+        fig_cat.update_layout(
+            height=400,
+            margin=dict(l=10, r=10, t=30, b=30),
+            xaxis_title=None,
+            yaxis_title=None,
+            showlegend=False,
+            xaxis=dict(
+                tickmode='array',
+                tickvals=total_sorted['category'],
+                ticktext=total_sorted['category'],
+                tickangle=0,
+                color='white',
+                tickfont=dict(size=18, color='white', family='Arial Black'),
+                showgrid=False,
+                zeroline=False,
+                showline=False
+            ),
+            yaxis=dict(
+                color='white',
+                tickfont=dict(size=16, color='white', family='Arial Black'),
+                showgrid=False,
+                zeroline=False,
+                showline=False,
+                tickformat=",.2f PLN"
+            ),
+            plot_bgcolor='#111',
+            paper_bgcolor='#111',
+            bargap=0.2
+        )
+        from streamlit_plotly_events import plotly_events
+        selected_points = plotly_events(
+            fig_cat,
+            click_event=True,
+            select_event=False,
+            hover_event=False,
+            override_height=400,
+            override_width="100%"
+        )
+        if selected_points:
+            selected = total_sorted['category'][selected_points[0]['pointIndex']]
+            st.session_state['selected_category'] = selected
+        elif st.session_state['selected_category']:
+            selected = st.session_state['selected_category']
+        else:
+            selected = None
     with col2:
-        if selected:
+        if 'selected' in locals() and selected:
             st.markdown(f"#### Szczegóły: {selected}")
+            sub = grouped[grouped['category'] == selected].copy()
+            sub['subcategory'] = sub['subcategory'].fillna('brak')
+            sub = sub.sort_values('sum', ascending=False)
+            green_shades = ['#b7e4c7', '#74c69d', '#40916c', '#2d6a4f', '#1b4332']
+            red_shades = ['#f8d7da', '#f5c2c7', '#e57373', '#d62728', '#7f1d1d']
+            color_scheme = green_shades if selected == 'Przychody' else red_shades
+            bar_colors = [color_scheme[i % len(color_scheme)] for i in range(len(sub))]
+            bar_text_sub = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']]
+            fig_sub = go.Figure()
+            fig_sub.add_trace(go.Bar(
+                x=sub['subcategory'],
+                y=sub['sum'],
+                marker_color=bar_colors,
+                text=bar_text_sub,
+                textposition='inside',
+                insidetextanchor='middle',
+                textfont=dict(color='white', size=18, family='Arial Black'),
+                hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
+            ))
+            fig_sub.update_layout(
+                height=400,
+                margin=dict(l=10, r=10, t=30, b=30),
+                xaxis_title=None,
+                yaxis_title=None,
+                showlegend=False,
+                title=f"🔍 Szczegóły: {selected}",
+                xaxis=dict(
+                    tickmode='array',
+                    tickvals=sub['subcategory'],
+                    ticktext=sub['subcategory'],
+                    tickangle=0,
+                    color='white',
+                    tickfont=dict(size=18, color='white', family='Arial Black'),
+                    showgrid=False,
+                    zeroline=False,
+                    showline=False
+                ),
+                yaxis=dict(
+                    color='white',
+                    tickfont=dict(size=16, color='white', family='Arial Black'),
+                    showgrid=False,
+                    zeroline=False,
+                    showline=False,
+                    tickformat=",.2f PLN"
+                ),
+                plot_bgcolor='#111',
+                paper_bgcolor='#111',
+                bargap=0.2
+            )
             st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
         else:
             st.markdown(
