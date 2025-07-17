@@ -197,34 +197,28 @@ def main():
     # ====================================================================
     edited_df = pd.DataFrame(edited)
 
-    # Agregacja z poprawką: Przychody to tylko dodatnie kwoty, reszta to tylko ujemne
-    przychody_df = edited_df[edited_df['category'] == 'Przychody']
-    wydatki_df = edited_df[edited_df['category'] != 'Przychody']
-
-    total_przychody = przychody_df[przychody_df['Amount'] > 0].groupby('category')['Amount'].agg(['sum', 'count']).reset_index()
-    total_wydatki = wydatki_df[wydatki_df['Amount'] < 0].groupby('category')['Amount'].agg(['sum', 'count']).reset_index()
-
-    total = pd.concat([total_przychody, total_wydatki], ignore_index=True)
-
-    # Upewnij się, że 'Przychody' istnieją, nawet jeśli suma wynosi 0
-    if 'Przychody' not in total['category'].tolist():
-        przychody_placeholder = pd.DataFrame([{'category': 'Przychody', 'sum': 0, 'count': 0}])
-        total = pd.concat([przychody_placeholder, total], ignore_index=True)
-
-    # Uporządkuj kategorie: Przychody pierwsze, reszta alfabetycznie
-    order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
+    # Stwórz kompletną listę kategorii z 'Przychody' na początku
+    all_cat_order = ['Przychody'] + sorted([c for c in CATEGORIES.keys() if c != 'Przychody'])
     
-    # Użyj `pd.Categorical` dla stabilnego sortowania i kompletności danych
-    total['category'] = pd.Categorical(total['category'], categories=order, ordered=True)
-    total = total.sort_values('category')
-    
-    # Uzupełnij brakujące kategorie z zerowymi wartościami
-    missing_cats = set(order) - set(total['category'])
-    if missing_cats:
-        missing_df = pd.DataFrame([{'category': cat, 'sum': 0, 'count': 0} for cat in missing_cats])
-        total = pd.concat([total, missing_df], ignore_index=True)
-    
-    total = total.sort_values('category').reset_index(drop=True)
+    # Inicjalizuj ramkę danych `total` ze wszystkimi kategoriami i zerowymi wartościami
+    total = pd.DataFrame({
+        'category': all_cat_order,
+        'sum': 0.0,
+        'count': 0
+    }).set_index('category')
+
+    # Oblicz rzeczywiste sumy i zaktualizuj `total`
+    if not edited_df.empty:
+        # Agregacja z poprawką: Przychody to tylko dodatnie kwoty, reszta to tylko ujemne
+        przychody_sum = edited_df[(edited_df['category'] == 'Przychody') & (edited_df['Amount'] > 0)].groupby('category')['Amount'].agg(['sum', 'count'])
+        wydatki_sum = edited_df[(edited_df['category'] != 'Przychody') & (edited_df['Amount'] < 0)].groupby('category')['Amount'].agg(['sum', 'count'])
+        
+        actuals = pd.concat([przychody_sum, wydatki_sum])
+        
+        # Zaktualizuj `total` rzeczywistymi wartościami
+        total.update(actuals)
+
+    total = total.reset_index()
     total['count'] = total['count'].astype(int)
 
     # Agregacja podkategorii
