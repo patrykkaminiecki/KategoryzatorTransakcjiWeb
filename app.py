@@ -248,6 +248,11 @@ def main():
     import plotly.graph_objects as go
     from plotly.colors import qualitative
 
+    # Przygotuj dane do wykresów
+    order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
+    total_sorted = total.set_index('category').loc[order].reset_index()
+    colors = ["#2ca02c" if c == "Przychody" else "#d62728" for c in total_sorted['category']]
+
     # POZIOM 3: Dwa wykresy obok siebie
     st.markdown("## 📈 Wykresy: kategorie i podkategorie")
     col1, col2 = st.columns(2, gap="large")
