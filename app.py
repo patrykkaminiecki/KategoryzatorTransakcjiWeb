@@ -278,19 +278,20 @@ def main():
             values=total_sorted['sum'].abs(),
             marker=dict(colors=colors, line=dict(color='#111', width=3)),
             textposition='auto',
-            texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
             hoverinfo='none',
             textfont=dict(size=11, family='Arial'),
             hole=.4,
             domain=dict(x=[0.1, 0.9], y=[0.1, 0.9])
         )])
         fig_cat.update_layout(
-            height=350, margin=dict(l=10, r=10, t=20, b=10),
+            height=350,
             showlegend=False,
             paper_bgcolor='#111',
             plot_bgcolor='#111',
             font_color='white',
-            uniformtext_minsize=8, uniformtext_mode='hide'
+            uniformtext_minsize=8, uniformtext_mode='hide',
+            automargin=True
         )
         st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False})
 
@@ -320,7 +321,7 @@ def main():
                 values=sub['sum'].abs(),
                 marker=dict(line=dict(color='#111', width=2)),
                 textposition='auto',
-                texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+                texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
                 hoverinfo='none',
                 textfont=dict(size=11, family='Arial'),
                 hole=.4,
@@ -328,12 +329,13 @@ def main():
             )])
             fig_sub.update_layout(
                 title=f"Podkategorie dla: {selected}",
-                height=350, margin=dict(l=10, r=10, t=40, b=10),
+                height=350,
                 showlegend=False,
                 paper_bgcolor='#111',
                 plot_bgcolor='#111',
                 font_color='white',
-                uniformtext_minsize=8, uniformtext_mode='hide'
+                uniformtext_minsize=8, uniformtext_mode='hide',
+                automargin=True
             )
             st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
         else:
