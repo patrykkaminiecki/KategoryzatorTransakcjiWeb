@@ -277,10 +277,10 @@ def main():
             labels=total_sorted['category'],
             values=total_sorted['sum'].abs(),
             marker_colors=colors,
-            textinfo='label+percent',
-            insidetextorientation='radial',
-            hoverinfo='label+value',
-            textfont=dict(color='white', size=13, family='Arial'),
+            textposition='auto',
+            texttemplate='%{label}<br>%{percent:.2%}<br>%{value:,.2f} zł'.replace(",", " ").replace(".", ","),
+            hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.2%}<extra></extra>'.replace(",", " ").replace(".", ","),
+            textfont=dict(size=13, family='Arial'),
             hole=.3
         )])
         fig_cat.update_layout(
@@ -316,10 +316,10 @@ def main():
             fig_sub = go.Figure(data=[go.Pie(
                 labels=sub['subcategory'],
                 values=sub['sum'].abs(),
-                textinfo='label+percent',
-                insidetextorientation='radial',
-                hoverinfo='label+value',
-                textfont=dict(color='white', size=13, family='Arial'),
+                textposition='auto',
+                texttemplate='%{label}<br>%{percent:.2%}<br>%{value:,.2f} zł'.replace(",", " ").replace(".", ","),
+                hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.2%}<extra></extra>'.replace(",", " ").replace(".", ","),
+                textfont=dict(size=13, family='Arial'),
                 hole=.3
             )])
             fig_sub.update_layout(
