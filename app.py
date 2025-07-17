@@ -249,7 +249,7 @@ def main():
         text=[f"{v:,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']],
         textposition='inside',
         insidetextanchor='middle',
-        hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN'<br>',
+        hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
     ))
     fig_cat.update_layout(
         height=400,
@@ -283,7 +283,7 @@ def main():
             text=[f"{v:,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']],
             textposition='inside',
             insidetextanchor='middle',
-            hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN'<br>',
+            hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
         ))
         fig_sub.update_layout(
             height=400,
