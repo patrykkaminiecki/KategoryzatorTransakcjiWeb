@@ -7,6 +7,9 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import altair as alt
+import plotly.graph_objects as go
+from plotly.colors import qualitative
+from streamlit_plotly_events import plotly_events
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -240,6 +243,8 @@ def main():
     if 'selected_category' not in st.session_state:
         st.session_state['selected_category'] = None
 
+    from streamlit_plotly_events import plotly_events
+
     # Wykres kategorii
     fig_cat = go.Figure()
     fig_cat.add_trace(go.Bar(
@@ -259,14 +264,21 @@ def main():
     )
 
     # Wyświetl wykres i obsłuż kliknięcie
-    selected = None
-    cat_click = st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False}, key="cat_chart")
-    clicked = st.session_state.get('plotly_click_cat_chart')
-    if clicked and 'points' in clicked and clicked['points']:
-        selected = clicked['points'][0]['x']
+    selected_points = plotly_events(
+        fig_cat,
+        click_event=True,
+        select_event=False,
+        hover_event=False,
+        override_height=400,
+        override_width="100%"
+    )
+    if selected_points:
+        selected = total_sorted['category'][selected_points[0]['pointIndex']]
         st.session_state['selected_category'] = selected
     elif st.session_state['selected_category']:
         selected = st.session_state['selected_category']
+    else:
+        selected = None
 
     # Wykres podkategorii po kliknięciu
     if selected:
