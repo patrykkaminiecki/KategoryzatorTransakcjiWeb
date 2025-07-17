@@ -7,10 +7,10 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime  # <-- potrzebne do YTD
 
 # ------------------------
-# 1) DEFINICJA KATEGORII (zaktualizowana)
+# 1) DEFINICJA KATEGORII
 # ------------------------
 CATEGORIES = {
     'Przychody': ['Patryk', 'Jolka', 'Świadczenia', 'Inne'],
@@ -37,8 +37,9 @@ CATEGORIES = {
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
-# 2) EMBEDDINGI, 3) CATEGORIZER, 4) load_bank_csv  -- tak jak wcześniej (bez zmian) --
-
+# ------------------------
+# 2) EMBEDDINGI
+# ------------------------
 @st.cache_resource
 def get_embed_model():
     return SentenceTransformer('all-MiniLM-L6-v2')
@@ -50,6 +51,9 @@ def get_pair_embs():
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
+# ------------------------
+# 3) CATEGORIZER
+# ------------------------
 def clean_desc(s):
     text = str(s).replace("'", "").replace('"', "")
     return re.sub(r'\s+', ' ', text).strip()
@@ -75,13 +79,18 @@ class Categorizer:
 
     def assign(self, key: str, cat: str, sub: str):
         kc = clean_desc(key)
-        if not kc: return
+        if not kc:
+            return
         self.map[kc] = (cat, sub)
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        pd.DataFrame([{"description": k,"category": c,"subcategory": s}
-                      for k,(c,s) in self.map.items()])\
-          .to_csv(ASSIGNMENTS_FILE, index=False)
+        pd.DataFrame([
+            {"description": k, "category": c, "subcategory": s}
+            for k,(c,s) in self.map.items()
+        ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
+# ------------------------
+# 4) WCZYTANIE CSV
+# ------------------------
 @st.cache_data
 def load_bank_csv(uploaded) -> pd.DataFrame:
     raw = uploaded.getvalue()
@@ -94,43 +103,150 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
             pass
     raise ValueError("Nie udało się wczytać pliku CSV.")
 
+# ------------------------
+# 5) GŁÓWNA FUNKCJA
+# ------------------------
 def main():
     st.set_page_config(page_title="Kategoryzator Finansowy", layout="wide")
-    # ... CSS i header ...
+    st.markdown("""
+    <style>
+      body { background-color: #18191A; color: #fff; }
+      .stApp { background-color: #18191A; }
+      .block-container { padding-top: 1.5rem; }
+      .stDataFrame, .stTable { background: #222 !important; }
+      .stMarkdown h1,h2,h3 { color: #7fd8be; font-weight: bold; }
+    </style>
+    """, unsafe_allow_html=True)
+
     st.title("🗂 Kategoryzator transakcji + Raporty")
     cat = Categorizer()
 
-    # wczytanie pliku, filtrowanie, bulk-assign, tabela itp. – tak jak poprzednio
+    # Sidebar: wczytanie pliku i filtr
+    st.sidebar.header("Filtr dat")
+    uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
+    if not uploaded:
+        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć.")
+        return
 
-    # …. 
-    # Po sekcji: Raport tekstowy:
-    # ====================================================================
+    try:
+        df_raw = load_bank_csv(uploaded)
+    except Exception as e:
+        st.error(str(e))
+        return
+
+    # Przygotowanie DF
+    cols = [c.strip() for c in df_raw.columns if c is not None]
+    df = df_raw.copy(); df.columns = cols
+    df = df.rename(columns={
+        'Data transakcji':'Date','Dane kontrahenta':'Description','Tytuł':'Tytuł',
+        'Nr rachunku':'Nr rachunku','Kwota transakcji (waluta rachunku)':'Amount',
+        'Kwota blokady/zwolnienie blokady':'Kwota blokady'
+    })[['Date','Description','Tytuł','Nr rachunku','Amount','Kwota blokady']]
+    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
+    df = df[df['Date'].notna()]
+
+    # Filtr dat w sidebarze
+    mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
+    if mode == "Zakres dat":
+        mn, mx = df['Date'].min(), df['Date'].max()
+        start, end = st.sidebar.date_input("Zakres dat", [mn, mx], min_value=mn, max_value=mx)
+        df = df[(df['Date']>=pd.to_datetime(start))&(df['Date']<=pd.to_datetime(end))]
+    else:
+        yrs = sorted(df['Date'].dt.year.unique())
+        months = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',
+                  6:'Czerwiec',7:'Lipiec',8:'Sierpień',9:'Wrzesień',
+                  10:'Październik',11:'Listopad',12:'Grudzień'}
+        y = st.sidebar.selectbox("Rok", yrs, index=len(yrs)-1)
+        mname = st.sidebar.selectbox("Miesiąc", list(months.values()), index=6)
+        m = {v:k for k,v in months.items()}[mname]
+        df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
+
+    # Bulk-assign
+    df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
+    st.markdown("#### Krok 1: Przypisz kategorie grupom")
+    for idxs in df.groupby('key').groups.values():
+        key = df.loc[idxs[0],'key']
+        if key in cat.map and cat.map[key][0]:
+            continue
+        amt = df.loc[idxs[0],'Amount']
+        st.write(f"**{key}** – {amt:.2f} PLN")
+        sugg = cat.suggest(key, amt)
+        sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
+                               index=list(CATEGORIES.keys()).index(sugg[0]), key=f"cat_{key}")
+        opts = CATEGORIES[sel_cat]
+        sel_sub = st.selectbox("Podkategoria", opts,
+                               index=opts.index(sugg[1]) if sugg[1] in opts else 0,
+                               key=f"sub_{key}")
+        cat.assign(key, sel_cat, sel_sub)
+
+    st.markdown("---")
+    st.success("Krok 1 zakończony – assignments.csv zaktualizowany.")
+
+    # Finalna tabela
+    df['category']    = df['key'].map(lambda k: cat.map.get(k,("", ""))[0])
+    df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
+    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
+    st.markdown("## 🗃️ Tabela transakcji")
+    edited = st.data_editor(final, hide_index=True, use_container_width=True)
+
+    if st.button("💾 Zapisz zmiany"):
+        keys = df['key'].tolist()
+        for i,row in enumerate(edited.itertuples(index=False)):
+            cat.assign(keys[i], row.category, row.subcategory)
+        st.success("Zapisano assignments.csv")
+
+    # Raport tekstowy
+    ed = edited.copy()
+    order = ['Przychody'] + sorted([c for c in CATEGORIES if c!='Przychody'])
+    total = pd.DataFrame({'category':order,'sum':0.0,'count':0}).set_index('category')
+    if not ed.empty:
+        inc = ed[(ed['category']=='Przychody')&(ed['Amount']>0)].groupby('category')['Amount'].agg(['sum','count'])
+        exp = ed[(ed['category']!='Przychody')&(ed['Amount']<0)].groupby('category')['Amount'].agg(['sum','count'])
+        total.update(pd.concat([inc,exp]))
+    total = total.reset_index()
+    total['count']=total['count'].astype(int)
+    total = total[total['count']>0]
+    grouped = ed.groupby(['category','subcategory'])['Amount'].agg(['sum','count']).reset_index()
+
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
-    # … generujemy `total` i `grouped` jak poprzednio …
-    # (kod identyczny jak wcześniej)
+    fmt = lambda v: f"{abs(v):,.2f}".replace(",", " ").replace(".",",")
 
-    # -------------------------------------------------------------------------------------------------
-    # NOWA SEKCJA: Oszczędności YTD (obejmuje cały rok, niezależnie od filtra poniżej)
-    # -------------------------------------------------------------------------------------------------
-    st.markdown("## 💰 Oszczędności YTD")
-    # Używamy pełnego `edited` z Date - nie filtrujemy po sidebar
-    edited['Date'] = pd.to_datetime(edited['Date'], errors='coerce')
-    year = datetime.now().year
-    ytd = edited[(edited['category']=='Oszczędności') & (edited['Date'].dt.year == year)]
-    # Agregacja główna
+    for _,r in total.iterrows():
+        with st.expander(f"{r['category']} ({r['count']}) – {fmt(r['sum'])}", expanded=False):
+            subs = grouped[grouped['category']==r['category']]
+            for __,s in subs.iterrows():
+                st.markdown(f"• **{s['subcategory']}** ({s['count']}) – {fmt(s['sum'])}", unsafe_allow_html=True)
+
+    # ---------------------------------------------------
+    # NOWA SEKCJA: Oszczędności YTD (biezący rok, bez filtra)
+    # ---------------------------------------------------
+    ytd_df = edited.copy()
+    ytd_df['Date'] = pd.to_datetime(ytd_df['Date'], errors='coerce')
+    current_year = datetime.now().year
+    ytd = ytd_df[
+        (ytd_df['category']=='Oszczędności') &
+        (ytd_df['Date'].dt.year==current_year)
+    ]
     ytd_total = ytd['Amount'].sum()
-    st.markdown(f"**Łącznie Oszczędności w {year}: {ytd_total:,.2f} zł**".replace(",", " "))
-    # Podkategorie
-    sub_ytd = ytd.groupby('subcategory')['Amount'].sum().reset_index().sort_values('Amount', ascending=False)
-    # Expander per podkategoria
+    st.markdown(f"## 💰 Oszczędności YTD ({current_year})")
+    st.markdown(f"**Łącznie: {ytd_total:,.2f} zł**".replace(",", " "))
+
+    sub_ytd = (
+        ytd
+        .groupby('subcategory')['Amount']
+        .sum()
+        .reset_index()
+        .sort_values('Amount', ascending=False)
+    )
     for _, row in sub_ytd.iterrows():
         name = row['subcategory']
         val  = row['Amount']
-        pct  = val / ytd_total if ytd_total!=0 else 0
-        with st.expander(f"**{name}** – {val:,.2f} zł ({pct:.0%})", expanded=False):
-            st.write(f"Podkategoria **{name}**: {val:,.2f} zł ({pct:.0%})")
+        pct  = (val/ytd_total) if ytd_total!=0 else 0
+        label = f"**{name}**<br>{pct:.0%}<br>{val:,.2f} zł"
+        with st.expander(label, expanded=False):
+            st.write(f"- Podkategoria **{name}**: {val:,.2f} zł ({pct:.0%})".replace(",", " "))
 
-    # … dalej wykresy kołowe kategorii i podkategorii (jak wcześniej) …
+    # Kołowe wykresy kategorii i podkategorii (kod jak wcześniej)...
 
 if __name__=="__main__":
     main()
