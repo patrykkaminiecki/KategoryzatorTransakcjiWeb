@@ -200,7 +200,21 @@ def main():
                         ignore_index=True)
         return grp, tot
 
-    grouped, total = get_report_tables(edited)
+    # Poprawiona agregacja: Przychody tylko dodatnie, reszta tylko ujemne
+    grouped = edited.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
+    grouped = grouped[grouped['count']>0]
+    def sum_by_type(df, cat):
+        if cat == 'Przychody':
+            return df[df['category']==cat]['Amount'][df['Amount']>0].sum()
+        else:
+            return df[df['category']==cat]['Amount'][df['Amount']<0].sum()
+    total = pd.DataFrame({
+        'category': [cat for cat in grouped['category'].unique()],
+        'count': [grouped[grouped['category']==cat]['count'].sum() for cat in grouped['category'].unique()],
+        'sum': [sum_by_type(edited, cat) for cat in grouped['category'].unique()]
+    })
+    order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
+    total = total.set_index('category').loc[order].reset_index()
 
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
 
