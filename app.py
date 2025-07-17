@@ -169,6 +169,8 @@ def main():
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("", ""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
 
+    # POZIOM 1: Tabela z danymi
+    st.markdown("## 🗃️ Tabela transakcji")
     edited = st.data_editor(final,
         column_config={
             'Date': st.column_config.Column("Data"),
@@ -178,7 +180,7 @@ def main():
             'Kwota blokady': st.column_config.NumberColumn("Blokada", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn("Podkategoria",
-                             options=[s for subs in CATEGORIES.values() for s in subs])
+                                 options=[s for subs in CATEGORIES.values() for s in subs])
         },
         hide_index=True, use_container_width=True
     )
@@ -216,6 +218,7 @@ def main():
     order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
     total = total.set_index('category').loc[order].reset_index()
 
+    # POZIOM 2: Raport tekstowy
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
 
     def fmt(val):
@@ -245,136 +248,33 @@ def main():
     import plotly.graph_objects as go
     from plotly.colors import qualitative
 
-    st.markdown("## 📈 Wykres: suma według kategorii (kliknij słupek)")
-
-    order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
-    total_sorted = total.set_index('category').loc[order].reset_index()
-
-    # Kolory
-    colors = ["#2ca02c" if c == "Przychody" else "#d62728" for c in total_sorted['category']]
-
-    # Stan kliknięcia
-    if 'selected_category' not in st.session_state:
-        st.session_state['selected_category'] = None
-
-    from streamlit_plotly_events import plotly_events
-
-    # Wykres kategorii - pionowe słupki, czarne tło, styl jak podkategorie
-    fig_cat = go.Figure()
-    # Formatowanie tekstu: białe, pogrubione
-    bar_text = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']]
-    fig_cat.add_trace(go.Bar(
-        x=total_sorted['category'],
-        y=total_sorted['sum'],
-        marker_color=colors,
-        text=bar_text,
-        textposition='inside',
-        insidetextanchor='middle',
-        textfont=dict(color='white', size=18, family='Arial Black'),
-        hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
-        width=0.6,
-        orientation='v',
-    ))
-    fig_cat.update_layout(
-        height=400,
-        margin=dict(l=10, r=10, t=30, b=30),
-        xaxis_title=None,
-        yaxis_title=None,
-        showlegend=False,
-        xaxis=dict(
-            tickmode='array',
-            tickvals=total_sorted['category'],
-            ticktext=total_sorted['category'],
-            tickangle=0,
-            color='white',
-            tickfont=dict(size=18, color='white', family='Arial Black'),
-            showgrid=False,
-            zeroline=False,
-            showline=False
-        ),
-        yaxis=dict(
-            color='white',
-            tickfont=dict(size=16, color='white', family='Arial Black'),
-            showgrid=False,
-            zeroline=False,
-            showline=False,
-            tickformat=",.2f PLN"
-        ),
-        plot_bgcolor='#111',
-        paper_bgcolor='#111',
-        bargap=0.2
-    )
-
-    # Wyświetl wykres i obsłuż kliknięcie
-    selected_points = plotly_events(
-        fig_cat,
-        click_event=True,
-        select_event=False,
-        hover_event=False,
-        override_height=400,
-        override_width="100%"
-    )
-    if selected_points:
-        selected = total_sorted['category'][selected_points[0]['pointIndex']]
-        st.session_state['selected_category'] = selected
-    elif st.session_state['selected_category']:
-        selected = st.session_state['selected_category']
-    else:
-        selected = None
-
-    # Wykres podkategorii po kliknięciu
-    if selected:
-        sub = grouped[grouped['category'] == selected].copy()
-        sub['subcategory'] = sub['subcategory'].fillna('brak')
-        sub = sub.sort_values('sum', ascending=False)
-        # Odcienie jak w Altair: Przychody - zielenie, reszta - czerwienie
-        green_shades = ['#b7e4c7', '#74c69d', '#40916c', '#2d6a4f', '#1b4332']
-        red_shades = ['#f8d7da', '#f5c2c7', '#e57373', '#d62728', '#7f1d1d']
-        color_scheme = green_shades if selected == 'Przychody' else red_shades
-        bar_colors = [color_scheme[i % len(color_scheme)] for i in range(len(sub))]
-        fig_sub = go.Figure()
-        bar_text_sub = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']]
-        fig_sub.add_trace(go.Bar(
-            x=sub['subcategory'],
-            y=sub['sum'],
-            marker_color=bar_colors,
-            text=bar_text_sub,
-            textposition='inside',
-            insidetextanchor='middle',
-            textfont=dict(color='white', size=18, family='Arial Black'),
-            hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
-        ))
-        fig_sub.update_layout(
-            height=400,
-            margin=dict(l=10, r=10, t=30, b=30),
-            xaxis_title=None,
-            yaxis_title=None,
-            showlegend=False,
-            title=f"🔍 Szczegóły: {selected}",
-            xaxis=dict(
-                tickmode='array',
-                tickvals=sub['subcategory'],
-                ticktext=sub['subcategory'],
-                tickangle=0,
-                color='white',
-                tickfont=dict(size=18, color='white', family='Arial Black'),
-                showgrid=False,
-                zeroline=False,
-                showline=False
-            ),
-            yaxis=dict(
-                color='white',
-                tickfont=dict(size=16, color='white', family='Arial Black'),
-                showgrid=False,
-                zeroline=False,
-                showline=False,
-                tickformat=",.2f PLN"
-            ),
-            plot_bgcolor='#111',
-            paper_bgcolor='#111',
-            bargap=0.2
-        )
-        st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
+    # POZIOM 3: Dwa wykresy obok siebie
+    st.markdown("## 📈 Wykresy: kategorie i podkategorie")
+    col1, col2 = st.columns(2, gap="large")
+    with col1:
+        st.markdown("#### Suma według kategorii")
+        st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False}, key="cat_chart")
+    with col2:
+        if selected:
+            st.markdown(f"#### Szczegóły: {selected}")
+            st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
+        else:
+            st.markdown(
+                "<div style='height:420px;display:flex;align-items:center;justify-content:center;color:#777;font-size:22px;font-weight:bold;'>Kliknij kategorię, aby zobaczyć podkategorie</div>",
+                unsafe_allow_html=True
+            )
 
 if __name__ == "__main__":
+    import streamlit as st
+    st.set_page_config(page_title="Kategoryzator Finansowy", layout="wide")
+    # Lekki custom CSS na tło i fonty
+    st.markdown('''
+        <style>
+        body { background-color: #18191A; color: #fff; }
+        .stApp { background-color: #18191A; }
+        .block-container { padding-top: 1.5rem; }
+        .stDataFrame, .stTable { background: #222 !important; }
+        .stMarkdown h2, .stMarkdown h3, .stMarkdown h1 { color: #7fd8be; font-weight: bold; }
+        </style>
+    ''', unsafe_allow_html=True)
     main()
