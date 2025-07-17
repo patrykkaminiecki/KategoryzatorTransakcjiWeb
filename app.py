@@ -285,7 +285,10 @@ def main():
         sub = grouped[grouped['category'] == selected].copy()
         sub['subcategory'] = sub['subcategory'].fillna('brak')
         sub = sub.sort_values('sum', ascending=False)
-        color_scheme = qualitative.Greens if selected == 'Przychody' else qualitative.Reds
+        # Odcienie jak w Altair: Przychody - zielenie, reszta - czerwienie
+        green_shades = ['#b7e4c7', '#74c69d', '#40916c', '#2d6a4f', '#1b4332']
+        red_shades = ['#f8d7da', '#f5c2c7', '#e57373', '#d62728', '#7f1d1d']
+        color_scheme = green_shades if selected == 'Przychody' else red_shades
         bar_colors = [color_scheme[i % len(color_scheme)] for i in range(len(sub))]
         fig_sub = go.Figure()
         fig_sub.add_trace(go.Bar(
