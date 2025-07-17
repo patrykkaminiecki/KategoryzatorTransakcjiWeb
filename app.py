@@ -75,10 +75,9 @@ class Categorizer:
         if not kc: return
         self.map[kc] = (cat, sub)
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        pd.DataFrame([
-            {"description": k, "category": c, "subcategory": s}
-            for k,(c,s) in self.map.items()
-        ]).to_csv(ASSIGNMENTS_FILE, index=False)
+        pd.DataFrame([{"description": k, "category": c, "subcategory": s}
+                      for k,(c,s) in self.map.items()]) \
+          .to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------
 # 4) WCZYTANIE CSV
@@ -101,13 +100,13 @@ def load_bank_csv(uploaded) -> pd.DataFrame:
 def main():
     st.set_page_config(page_title="Kategoryzator Finansowy", layout="wide")
     st.markdown("""
-        <style>
+      <style>
         body { background-color: #18191A; color: #fff; }
         .stApp { background-color: #18191A; }
         .block-container { padding-top: 1.5rem; }
         .stDataFrame, .stTable { background: #222 !important; }
         .stMarkdown h1,h2,h3 { color: #7fd8be; font-weight: bold; }
-        </style>
+      </style>
     """, unsafe_allow_html=True)
 
     st.title("🗂 Kategoryzator transakcji + Raporty")
@@ -117,13 +116,16 @@ def main():
     st.sidebar.header("Filtr dat")
     uploaded = st.sidebar.file_uploader("Wybierz plik CSV", type="csv")
     if not uploaded:
-        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć."); return
+        st.sidebar.info("Wczytaj plik CSV, aby rozpocząć.")
+        return
 
     try:
         df_raw = load_bank_csv(uploaded)
     except Exception as e:
-        st.error(str(e)); return
+        st.error(str(e))
+        return
 
+    # Przygotowanie df
     cols = [c.strip() for c in df_raw.columns if c is not None]
     df = df_raw.copy(); df.columns = cols
     df = df.rename(columns={
@@ -134,6 +136,7 @@ def main():
     df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
     df = df[df['Date'].notna()]
 
+    # Filtr dat
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
     if mode == "Zakres dat":
         mn, mx = df['Date'].min(), df['Date'].max()
@@ -150,19 +153,19 @@ def main():
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
     # Bulk-assign
-    df['key'] = (df['Nr rachunku'].astype(str).fillna('') + '|' + df['Description']).map(clean_desc)
+    df['key'] = (df['Nr rachunku'].astype(str).fillna('')+'|'+df['Description']).map(clean_desc)
     st.markdown("#### Krok 1: Przypisz kategorie grupom")
     for idxs in df.groupby('key').groups.values():
         key = df.loc[idxs[0],'key']
         if key in cat.map and cat.map[key][0]: continue
         amt = df.loc[idxs[0],'Amount']
         st.write(f"**{key}** – {amt:.2f} PLN")
-        sugg = cat.suggest(key, amt)
+        sc = cat.suggest(key, amt)
         sel_cat = st.selectbox("Kategoria", list(CATEGORIES.keys()),
-                               index=list(CATEGORIES.keys()).index(sugg[0]), key=f"cat_{key}")
+                               index=list(CATEGORIES.keys()).index(sc[0]), key=f"cat_{key}")
         opts = CATEGORIES[sel_cat]
         sel_sub = st.selectbox("Podkategoria", opts,
-                               index=opts.index(sugg[1]) if sugg[1] in opts else 0,
+                               index=opts.index(sc[1]) if sc[1] in opts else 0,
                                key=f"sub_{key}")
         cat.assign(key, sel_cat, sel_sub)
 
@@ -181,10 +184,10 @@ def main():
             cat.assign(keys[i], row.category, row.subcategory)
         st.success("Zapisano assignments.csv")
 
-    # Przygotowanie raportu
+    # Raport
     ed = edited.copy()
-    all_order = ['Przychody'] + sorted([c for c in CATEGORIES if c!='Przychody'])
-    total = pd.DataFrame({'category':all_order,'sum':0.0,'count':0}).set_index('category')
+    order = ['Przychody']+sorted([c for c in CATEGORIES if c!='Przychody'])
+    total = pd.DataFrame({'category':order,'sum':0.0,'count':0}).set_index('category')
     if not ed.empty:
         inc = ed[(ed['category']=='Przychody')&(ed['Amount']>0)].groupby('category')['Amount'].agg(['sum','count'])
         exp = ed[(ed['category']!='Przychody')&(ed['Amount']<0)].groupby('category')['Amount'].agg(['sum','count'])
@@ -195,94 +198,79 @@ def main():
     grouped = ed.groupby(['category','subcategory'])['Amount'].agg(['sum','count']).reset_index()
 
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
-    fmt = lambda v: f"{abs(v):,.2f}".replace(","," ").replace(".",",")
+    fmt=lambda v:f"{abs(v):,.2f}".replace(","," ").replace(".",",")
 
     for _,r in total.iterrows():
         with st.expander(f"{r['category']} ({r['count']}) – {fmt(r['sum'])}", expanded=False):
-            subs = grouped[grouped['category']==r['category']]
+            subs=grouped[grouped['category']==r['category']]
             for __,s in subs.iterrows():
-                st.markdown(f"• **{s['subcategory']}** ({s['count']}) – {fmt(s['sum'])}",
-                            unsafe_allow_html=True)
+                st.markdown(f"• **{s['subcategory']}** ({s['count']}) – {fmt(s['sum'])}", unsafe_allow_html=True)
 
     # ----------------------------------------------------------------
-    # WYKRESY KOŁOWE – pełna poprawka etykiet na zewnątrz i marginesy
+    # KOŁOWE z etykietami na zewnątrz i pełnym obszarem
     # ----------------------------------------------------------------
     st.markdown("## 📈 Wykresy: kategorie i podkategorie")
-    total_sorted = total.reset_index(drop=True)
-    colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in total_sorted['category']]
-    col1,col2 = st.columns([3,1], gap="medium")
+    tot = total.reset_index(drop=True)
+    colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
+    col1,col2=st.columns([3,1], gap="medium")
 
     with col1:
         st.markdown("#### Podział kategorii")
-        fig_cat = go.Figure(data=[go.Pie(
-            labels=total_sorted['category'],
-            values=total_sorted['sum'].abs(),
+        fig_cat=go.Figure(data=[go.Pie(
+            labels=tot['category'],
+            values=tot['sum'].abs(),
             marker=dict(colors=colors, line=dict(color='#111', width=3)),
             hole=0.3,
             textposition='outside',
-            textinfo='label+percent',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
             textfont=dict(size=14, color='white'),
-            pull=[0.02]*len(total_sorted),
+            pull=[0.02]*len(tot),
             hoverinfo='none',
-            domain=dict(x=[0.1,0.9], y=[0.1,0.9])
+            domain=dict(x=[0,1], y=[0,1])
         )])
-        fig_cat.update_traces(
-            textposition='outside',
-            insidetextorientation=None
-        )
+        fig_cat.update_traces(textposition='outside')
         fig_cat.update_layout(
-            height=350,
+            height=450,
             showlegend=False,
-            paper_bgcolor='#111',
-            plot_bgcolor='#111',
-            font_color='white',
-            uniformtext_minsize=8,
-            uniformtext_mode='hide',
-            margin=dict(l=20, r=20, t=40, b=20)
+            paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+            uniformtext_minsize=8, uniformtext_mode='hide',
+            margin=dict(l=10,r=10,t=40,b=10)
         )
         st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
 
     with col2:
         st.markdown("#### Wybierz kategorię")
-        if 'selected' not in st.session_state:
-            st.session_state['selected']=None
-        for c in total_sorted['category']:
-            if st.button(c, key=f"btn_{c}", use_container_width=True):
+        if 'selected' not in st.session_state: st.session_state['selected']=None
+        for c in tot['category']:
+            if st.button(c,key=f"btn_{c}",use_container_width=True):
                 st.session_state['selected']=c
-        if st.button("Wszystkie", key="btn_all", use_container_width=True):
+        if st.button("Wszystkie",key="btn_all",use_container_width=True):
             st.session_state['selected']=None
 
-    selected = st.session_state['selected']
-    if selected:
-        st.markdown(f"### Szczegóły dla: {selected}")
-        sub = grouped[grouped['category']==selected].sort_values('sum', ascending=False).reset_index(drop=True)
-        st.markdown(f"**Podkategorie dla: {selected}**")
-        fig_sub = go.Figure(data=[go.Pie(
+    sel=st.session_state['selected']
+    if sel:
+        st.markdown(f"### Szczegóły dla: {sel}")
+        sub=grouped[grouped['category']==sel].sort_values('sum',ascending=False).reset_index(drop=True)
+        fig_sub=go.Figure(data=[go.Pie(
             labels=sub['subcategory'],
             values=sub['sum'].abs(),
-            marker=dict(line=dict(color='#111', width=2)),
+            marker=dict(line=dict(color='#111',width=2)),
             hole=0.3,
             textposition='outside',
-            textinfo='label+percent',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
             textfont=dict(size=14, color='white'),
             pull=[0.02]*len(sub),
             hoverinfo='none',
-            domain=dict(x=[0.1,0.9], y=[0.1,0.9])
+            domain=dict(x=[0,1], y=[0,1])
         )])
-        fig_sub.update_traces(
-            textposition='outside',
-            insidetextorientation=None
-        )
+        fig_sub.update_traces(textposition='outside')
         fig_sub.update_layout(
-            title=f"Podkategorie dla: {selected}",
-            height=350,
+            title=f"Podkategorie dla: {sel}",
+            height=450,
             showlegend=False,
-            paper_bgcolor='#111',
-            plot_bgcolor='#111',
-            font_color='white',
-            uniformtext_minsize=8,
-            uniformtext_mode='hide',
-            margin=dict(l=20, r=20, t=40, b=20)
+            paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+            uniformtext_minsize=8, uniformtext_mode='hide',
+            margin=dict(l=10,r=10,t=40,b=10)
         )
         st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False}, key="sub")
 
