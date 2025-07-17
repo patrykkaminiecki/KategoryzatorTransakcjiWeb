@@ -192,31 +192,33 @@ def main():
             cat.assign(key, row.category, row.subcategory)
         st.success("Zapisano assignments.csv")
 
-    @st.cache_data
-    def get_report_tables(df_final):
-        grp = df_final.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
-        grp = grp[grp['count']>0]
-        tot = grp.groupby('category').agg({'count':'sum','sum':'sum'}).reset_index()
-        tot = pd.concat([tot[tot['category']=='Przychody'],
-                         tot[tot['category']!='Przychody'].sort_values('category')],
-                        ignore_index=True)
-        return grp, tot
+    # ====================================================================
+    # PRZYGOTOWANIE DANYCH DO RAPORTU I WYKRESÓW (na podstawie `edited`)
+    # ====================================================================
+    edited_df = pd.DataFrame(edited)
 
-    # Poprawiona agregacja: Przychody tylko dodatnie, reszta tylko ujemne
-    grouped = edited.groupby(['category','subcategory'])['Amount'].agg(['count','sum']).reset_index()
-    grouped = grouped[grouped['count']>0]
-    def sum_by_type(df, cat):
-        if cat == 'Przychody':
-            return df[df['category']==cat]['Amount'][df['Amount']>0].sum()
-        else:
-            return df[df['category']==cat]['Amount'][df['Amount']<0].sum()
-    total = pd.DataFrame({
-        'category': [cat for cat in grouped['category'].unique()],
-        'count': [grouped[grouped['category']==cat]['count'].sum() for cat in grouped['category'].unique()],
-        'sum': [sum_by_type(edited, cat) for cat in grouped['category'].unique()]
-    })
+    # Agregacja z poprawką: Przychody to tylko dodatnie kwoty, reszta to tylko ujemne
+    przychody_df = edited_df[edited_df['category'] == 'Przychody']
+    wydatki_df = edited_df[edited_df['category'] != 'Przychody']
+
+    total_przychody = przychody_df[przychody_df['Amount'] > 0].groupby('category')['Amount'].agg(['sum', 'count']).reset_index()
+    total_wydatki = wydatki_df[wydatki_df['Amount'] < 0].groupby('category')['Amount'].agg(['sum', 'count']).reset_index()
+
+    total = pd.concat([total_przychody, total_wydatki], ignore_index=True)
+
+    # Upewnij się, że 'Przychody' istnieją, nawet jeśli suma wynosi 0
+    if 'Przychody' not in total['category'].tolist():
+        przychody_placeholder = pd.DataFrame([{'category': 'Przychody', 'sum': 0, 'count': 0}])
+        total = pd.concat([przychody_placeholder, total], ignore_index=True)
+
+    # Uporządkuj kategorie: Przychody pierwsze, reszta alfabetycznie
     order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
-    total = total.set_index('category').loc[order].reset_index()
+    all_categories = pd.Index(order)
+    total = total.set_index('category').reindex(all_categories, fill_value=0).reset_index()
+    total['count'] = total['count'].astype(int)
+
+    # Agregacja podkategorii
+    grouped = edited_df.groupby(['category', 'subcategory'])['Amount'].agg(['sum', 'count']).reset_index()
 
     # POZIOM 2: Raport tekstowy
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
@@ -242,9 +244,8 @@ def main():
                     f"<span style='font-size:16px'>• <strong>{sub_cat}</strong> ({sub_count}) – {sub_sum}</span>",
                     unsafe_allow_html=True
                 )
-        # -------------------------
-    # 6.x) WYKRES: z kolorami
-    # -------------------------
+
+    # POZIOM 3: Wykresy
     import plotly.graph_objects as go
     from plotly.colors import qualitative
 
@@ -257,8 +258,7 @@ def main():
     st.markdown("## 📈 Wykresy: kategorie i podkategorie")
     col1, col2 = st.columns(2, gap="large")
     with col1:
-        st.markdown("#### Suma według kategorii")
-        # Tworzenie wykresu kategorii
+        st.markdown("#### Suma według kategorii (kliknij)")
         bar_text = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']]
         fig_cat = go.Figure()
         fig_cat.add_trace(go.Bar(
@@ -313,7 +313,7 @@ def main():
         if selected_points:
             selected = total_sorted['category'][selected_points[0]['pointIndex']]
             st.session_state['selected_category'] = selected
-        elif 'selected_category' in st.session_state and st.session_state['selected_category']:
+        elif 'selected_category' in st.session_state and st.session_state.get('selected_category'):
             selected = st.session_state['selected_category']
         else:
             selected = None
