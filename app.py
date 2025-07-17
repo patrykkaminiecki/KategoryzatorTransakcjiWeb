@@ -7,7 +7,8 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import plotly.graph_objects as go
-from datetime import datetime
+from datetime import datetime, timedelta
+import calendar
 
 # ------------------------
 # 1) DEFINICJA KATEGORII
@@ -24,16 +25,46 @@ CATEGORIES = {
     'Dom i Ogród': ['Dom', 'Ogród', 'Zwierzęta'],
     'Inne': ['Prezenty', 'Rozrywka', 'Hobby', 'Edukacja'],
     'Oszczędności': [
-        'Poduszka bezpieczeństwa - Lokata',
-        'Poduszka bezpieczeństwa - Konto',
-        'Poduszka bezpieczeństwa - Obligacje',
         'Fundusz celowy',
-        'Inwestycje'
+        'Inwestycje',
+        'Poduszka bezpieczeństwa - Konto',
+        'Poduszka bezpieczeństwa - Lokata',
+        'Poduszka bezpieczeństwa - Obligacje'
     ],
     'Nadpłata Długów': ['Hipoteka', 'Samochód', 'TV+Dyson', 'Gmina Kolbudy'],
     'Wakacje': ['Wakacje'],
     'Gotówka': ['Wpłata', 'Wypłata']
 }
+
+# Modele dystrybucji oszczędności
+SAVINGS_MODELS = {
+    "Zasada 50/30/20": {
+        "description": "50% potrzeby, 30% rozrywka, 20% oszczędności",
+        "distribution": {
+            "Poduszka bezpieczeństwa - Konto": 50,
+            "Inwestycje": 30,
+            "Fundusz celowy": 20
+        }
+    },
+    "Konserwatywny": {
+        "description": "Priorytet bezpieczeństwa finansowego",
+        "distribution": {
+            "Poduszka bezpieczeństwa - Lokata": 40,
+            "Poduszka bezpieczeństwa - Obligacje": 30,
+            "Poduszka bezpieczeństwa - Konto": 20,
+            "Fundusz celowy": 10
+        }
+    },
+    "Agresywny": {
+        "description": "Priorytet wzrostu kapitału",
+        "distribution": {
+            "Inwestycje": 60,
+            "Fundusz celowy": 25,
+            "Poduszka bezpieczeństwa - Konto": 15
+        }
+    }
+}
+
 ASSIGNMENTS_FILE = Path("assignments.csv")
 CATEGORY_PAIRS = [f"{cat} — {sub}" for cat, subs in CATEGORIES.items() for sub in subs]
 
@@ -122,7 +153,122 @@ def calculate_effective_amount(row):
         return 0
 
 # ------------------------
-# 6) GŁÓWNA FUNKCJA
+# 6) FUNKCJE PROGNOZY
+# ------------------------
+def get_monthly_averages(df_full, months_back=3):
+    """Oblicza średnie miesięczne wydatki na podstawie ostatnich miesięcy"""
+    current_date = datetime.now()
+    start_date = current_date - timedelta(days=months_back*30)
+    
+    recent_data = df_full[df_full['Date'] >= start_date]
+    
+    monthly_avg = recent_data.groupby(['category', 'subcategory']).agg({
+        'Effective_Amount': 'mean'
+    }).reset_index()
+    
+    return monthly_avg
+
+def get_same_month_last_year(df_full, target_month, target_year):
+    """Pobiera dane z tego samego miesiąca rok wcześniej"""
+    last_year_data = df_full[
+        (df_full['Date'].dt.month == target_month) & 
+        (df_full['Date'].dt.year == target_year - 1)
+    ]
+    
+    if last_year_data.empty:
+        return pd.DataFrame()
+    
+    monthly_data = last_year_data.groupby(['category', 'subcategory']).agg({
+        'Effective_Amount': 'sum'
+    }).reset_index()
+    
+    return monthly_data
+
+def get_recurring_expenses(df_full, months_back=6):
+    """Identyfikuje powtarzające się wydatki na podstawie ostatnich miesięcy"""
+    current_date = datetime.now()
+    start_date = current_date - timedelta(days=months_back*30)
+    
+    recent_data = df_full[df_full['Date'] >= start_date]
+    
+    # Grupuj po miesiącach i kategorii
+    monthly_groups = recent_data.groupby([
+        recent_data['Date'].dt.to_period('M'),
+        'category', 
+        'subcategory'
+    ]).agg({
+        'Effective_Amount': 'sum'
+    }).reset_index()
+    
+    # Znajdź wydatki które pojawiają się w większości miesięcy
+    recurring = monthly_groups.groupby(['category', 'subcategory']).agg({
+        'Effective_Amount': ['mean', 'count']
+    }).reset_index()
+    
+    recurring.columns = ['category', 'subcategory', 'avg_amount', 'months_count']
+    
+    # Filtruj te które występują w co najmniej połowie miesięcy
+    min_months = max(1, months_back // 2)
+    recurring = recurring[recurring['months_count'] >= min_months]
+    
+    return recurring
+
+def create_forecast(df_full, target_month, target_year):
+    """Tworzy prognozę na podstawie różnych metod"""
+    
+    # Metoda 1: Średnia z ostatnich 3 miesięcy
+    avg_3m = get_monthly_averages(df_full, 3)
+    
+    # Metoda 2: Dane z tego samego miesiąca rok wcześniej
+    same_month_ly = get_same_month_last_year(df_full, target_month, target_year)
+    
+    # Metoda 3: Powtarzające się wydatki
+    recurring = get_recurring_expenses(df_full)
+    
+    # Kombinuj prognozy - priorytet dla powtarzających się wydatków
+    forecast = pd.DataFrame()
+    
+    # Rozpocznij od powtarzających się wydatków
+    if not recurring.empty:
+        forecast = recurring[['category', 'subcategory', 'avg_amount']].copy()
+        forecast = forecast.rename(columns={'avg_amount': 'predicted_amount'})
+    
+    # Dodaj z średniej 3-miesięcznej dla kategorii których nie ma
+    if not avg_3m.empty:
+        for _, row in avg_3m.iterrows():
+            exists = (
+                (forecast['category'] == row['category']) & 
+                (forecast['subcategory'] == row['subcategory'])
+            ).any()
+            
+            if not exists:
+                new_row = pd.DataFrame({
+                    'category': [row['category']],
+                    'subcategory': [row['subcategory']],
+                    'predicted_amount': [row['Effective_Amount']]
+                })
+                forecast = pd.concat([forecast, new_row], ignore_index=True)
+    
+    # Dodaj z roku wcześniejszego dla kategorii których nie ma
+    if not same_month_ly.empty:
+        for _, row in same_month_ly.iterrows():
+            exists = (
+                (forecast['category'] == row['category']) & 
+                (forecast['subcategory'] == row['subcategory'])
+            ).any()
+            
+            if not exists:
+                new_row = pd.DataFrame({
+                    'category': [row['category']],
+                    'subcategory': [row['subcategory']],
+                    'predicted_amount': [row['Effective_Amount']]
+                })
+                forecast = pd.concat([forecast, new_row], ignore_index=True)
+    
+    return forecast
+
+# ------------------------
+# 7) GŁÓWNA FUNKCJA
 # ------------------------
 def main():
     st.set_page_config(page_title="Kategoryzator", layout="wide")
@@ -254,16 +400,143 @@ def main():
                     color = "green" if s['sum'] >= 0 else "red"
                     st.markdown(f"• **{s['subcategory']}** ({int(s['count'])}) – <span style='color:{color}'>{fmt(s['sum'])}</span>", unsafe_allow_html=True)
 
-    # OSZCZĘDNOŚCI YTD (pełne dane - bez filtrowania)
+    # OSZCZĘDNOŚCI YTD (pełne dane - bez filtrowania) - POSORTOWANE A-Z
     with colB:
         st.markdown(f"## 💰 Oszczędności YTD ({datetime.now().year})")
         ytd = df_full[(df_full['category']=='Oszczędności') & (df_full['Date'].dt.year==datetime.now().year)]
         total_ytd = ytd['Effective_Amount'].sum()
         st.markdown(f"**Łącznie: {abs(total_ytd):,.2f} zł**".replace(",", " "))
-        sub = ytd.groupby('subcategory')['Effective_Amount'].sum().reset_index().sort_values('Effective_Amount', ascending=False)
+        sub = ytd.groupby('subcategory')['Effective_Amount'].sum().reset_index().sort_values('subcategory')  # Sortowanie A-Z
         for _,r in sub.iterrows():
             pct = (r['Effective_Amount']/total_ytd) if total_ytd else 0
             st.markdown(f"• **{r['subcategory']}** ({pct:.0%}) – {abs(r['Effective_Amount']):,.2f} zł".replace(",", " "))
+
+    # --- SEKCJA SYMULACJI ---
+    st.markdown("## 🔮 Symulacja przyszłego miesiąca")
+    
+    # Wybór miesiąca do prognozy
+    col_month, col_year = st.columns(2)
+    with col_month:
+        next_month = datetime.now().month + 1 if datetime.now().month < 12 else 1
+        month_names = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
+        selected_month_name = st.selectbox("Miesiąc prognozy", month_names, index=next_month-1)
+        selected_month = month_names.index(selected_month_name) + 1
+    
+    with col_year:
+        next_year = datetime.now().year if datetime.now().month < 12 else datetime.now().year + 1
+        selected_year = st.selectbox("Rok prognozy", [next_year, next_year + 1], index=0)
+    
+    # Generuj prognozę
+    forecast = create_forecast(df_full, selected_month, selected_year)
+    
+    if not forecast.empty:
+        # Oblicz prognozowane przychody i wydatki
+        forecast_income = forecast[forecast['category'] == 'Przychody']['predicted_amount'].sum()
+        forecast_expenses = forecast[forecast['category'] != 'Przychody']['predicted_amount'].sum()
+        forecast_balance = forecast_income + forecast_expenses  # expenses są ujemne
+        
+        col_sim_a, col_sim_b = st.columns(2)
+        
+        with col_sim_a:
+            st.markdown("### 📈 Prognoza finansowa")
+            st.markdown(f"**Przychody:** {forecast_income:,.2f} zł".replace(",", " "))
+            st.markdown(f"**Wydatki:** {abs(forecast_expenses):,.2f} zł".replace(",", " "))
+            st.markdown(f"**Saldo:** {forecast_balance:,.2f} zł".replace(",", " "))
+            
+            # Szczegółowa prognoza po kategoriach
+            st.markdown("### 📋 Szczegółowa prognoza")
+            for category in sorted(forecast['category'].unique()):
+                cat_data = forecast[forecast['category'] == category]
+                cat_total = cat_data['predicted_amount'].sum()
+                
+                with st.expander(f"{category} – {abs(cat_total):,.2f} zł".replace(",", " ")):
+                    for _, row in cat_data.iterrows():
+                        color = "green" if row['predicted_amount'] >= 0 else "red"
+                        st.markdown(f"• **{row['subcategory']}** – <span style='color:{color}'>{abs(row['predicted_amount']):,.2f} zł</span>".replace(",", " "), unsafe_allow_html=True)
+        
+        with col_sim_b:
+            st.markdown("### 💰 Dystrybucja oszczędności")
+            
+            if forecast_balance > 0:
+                # Wybór modelu dystrybucji
+                model_choice = st.selectbox(
+                    "Wybierz model dystrybucji",
+                    list(SAVINGS_MODELS.keys()) + ["Własny"]
+                )
+                
+                st.markdown(f"**Do dystrybucji:** {forecast_balance:,.2f} zł".replace(",", " "))
+                
+                if model_choice != "Własny":
+                    # Użyj predefiniowanego modelu
+                    model = SAVINGS_MODELS[model_choice]
+                    st.markdown(f"*{model['description']}*")
+                    
+                    distribution = {}
+                    for subcategory, percentage in model['distribution'].items():
+                        amount = forecast_balance * percentage / 100
+                        distribution[subcategory] = amount
+                        st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
+                    
+                    # Dodaj dystrybucję do nadpłat długów
+                    st.markdown("### 💳 Nadpłata długów")
+                    debt_categories = ['Hipoteka', 'Samochód', 'TV+Dyson', 'Gmina Kolbudy']
+                    remaining_after_savings = forecast_balance * 0.8  # 20% na nadpłaty
+                    
+                    for debt in debt_categories:
+                        debt_amount = remaining_after_savings / len(debt_categories)
+                        st.markdown(f"• **{debt}** – {debt_amount:,.2f} zł".replace(",", " "))
+                
+                else:
+                    # Własny model - sliders
+                    st.markdown("**Ustaw własne proporcje:**")
+                    
+                    savings_subs = CATEGORIES['Oszczędności']
+                    debt_subs = CATEGORIES['Nadpłata Długów']
+                    
+                    # Sliders dla oszczędności
+                    savings_percentages = {}
+                    debt_percentages = {}
+                    
+                    total_savings = st.slider("% na oszczędności", 0, 100, 60)
+                    total_debt = st.slider("% na nadpłaty długów", 0, 100-total_savings, 40)
+                    
+                    st.markdown("**Dystrybucja oszczędności:**")
+                    remaining_savings = total_savings
+                    for i, sub in enumerate(savings_subs):
+                        if i == len(savings_subs) - 1:
+                            # Ostatnia kategoria dostaje resztę
+                            savings_percentages[sub] = remaining_savings
+                        else:
+                            max_val = remaining_savings
+                            pct = st.slider(f"{sub} (%)", 0, max_val, min(20, max_val), key=f"sav_{sub}")
+                            savings_percentages[sub] = pct
+                            remaining_savings -= pct
+                    
+                    st.markdown("**Dystrybucja nadpłat:**")
+                    remaining_debt = total_debt
+                    for i, sub in enumerate(debt_subs):
+                        if i == len(debt_subs) - 1:
+                            debt_percentages[sub] = remaining_debt
+                        else:
+                            max_val = remaining_debt
+                            pct = st.slider(f"{sub} (%)", 0, max_val, min(10, max_val), key=f"debt_{sub}")
+                            debt_percentages[sub] = pct
+                            remaining_debt -= pct
+                    
+                    # Pokaż końcowe kwoty
+                    st.markdown("### 💰 Końcowa dystrybucja")
+                    st.markdown("**Oszczędności:**")
+                    for sub, pct in savings_percentages.items():
+                        amount = forecast_balance * pct / 100
+                        st.markdown(f"• **{sub}** ({pct}%) – {amount:,.2f} zł".replace(",", " "))
+                    
+                    st.markdown("**Nadpłaty długów:**")
+                    for sub, pct in debt_percentages.items():
+                        amount = forecast_balance * pct / 100
+                        st.markdown(f"• **{sub}** ({pct}%) – {amount:,.2f} zł".replace(",", " "))
+            else:
+                st.warning("Prognozowane saldo jest ujemne - brak środków na oszczędności")
 
     # --- DRILL‑DOWN wykresy kołowe ---
     st.markdown("## 📈 Wykresy kołowe")
