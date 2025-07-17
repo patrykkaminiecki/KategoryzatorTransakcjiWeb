@@ -207,34 +207,38 @@ def main():
                 st.markdown(f"• **{s['subcategory']}** ({s['count']}) – {fmt(s['sum'])}", unsafe_allow_html=True)
 
     # ----------------------------------------------------------------
-    # KOŁOWE z etykietami na zewnątrz i pełnym obszarem
+    # KOŁOWE z etykietami na zewnątrz – większa przestrzeń
     # ----------------------------------------------------------------
     st.markdown("## 📈 Wykresy: kategorie i podkategorie")
     tot = total.reset_index(drop=True)
     colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
-    col1,col2=st.columns([3,1], gap="medium")
+    col1, col2 = st.columns([3,1], gap="medium")
 
     with col1:
         st.markdown("#### Podział kategorii")
-        fig_cat=go.Figure(data=[go.Pie(
+        fig_cat = go.Figure(data=[go.Pie(
             labels=tot['category'],
             values=tot['sum'].abs(),
             marker=dict(colors=colors, line=dict(color='#111', width=3)),
             hole=0.3,
+            # domain mniejsze, by dać miejsce etykietom
+            domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
             textposition='outside',
             texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
             textfont=dict(size=14, color='white'),
             pull=[0.02]*len(tot),
-            hoverinfo='none',
-            domain=dict(x=[0,1], y=[0,1])
+            hoverinfo='none'
         )])
+        # domyślnie draw traces
         fig_cat.update_traces(textposition='outside')
+        # większe marginesy, cały obszar na rysunek
         fig_cat.update_layout(
-            height=450,
+            height=500,
             showlegend=False,
-            paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
-            uniformtext_minsize=8, uniformtext_mode='hide',
-            margin=dict(l=10,r=10,t=40,b=10)
+            paper_bgcolor='#111',
+            plot_bgcolor='#111',
+            font_color='white',
+            margin=dict(l=100, r=100, t=40, b=100)
         )
         st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
 
@@ -242,35 +246,36 @@ def main():
         st.markdown("#### Wybierz kategorię")
         if 'selected' not in st.session_state: st.session_state['selected']=None
         for c in tot['category']:
-            if st.button(c,key=f"btn_{c}",use_container_width=True):
+            if st.button(c, key=f"btn_{c}", use_container_width=True):
                 st.session_state['selected']=c
-        if st.button("Wszystkie",key="btn_all",use_container_width=True):
+        if st.button("Wszystkie", key="btn_all", use_container_width=True):
             st.session_state['selected']=None
 
-    sel=st.session_state['selected']
+    sel = st.session_state['selected']
     if sel:
         st.markdown(f"### Szczegóły dla: {sel}")
-        sub=grouped[grouped['category']==sel].sort_values('sum',ascending=False).reset_index(drop=True)
-        fig_sub=go.Figure(data=[go.Pie(
+        sub = grouped[grouped['category']==sel].sort_values('sum', ascending=False).reset_index(drop=True)
+        fig_sub = go.Figure(data=[go.Pie(
             labels=sub['subcategory'],
             values=sub['sum'].abs(),
             marker=dict(line=dict(color='#111',width=2)),
             hole=0.3,
+            domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
             textposition='outside',
             texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
             textfont=dict(size=14, color='white'),
             pull=[0.02]*len(sub),
-            hoverinfo='none',
-            domain=dict(x=[0,1], y=[0,1])
+            hoverinfo='none'
         )])
         fig_sub.update_traces(textposition='outside')
         fig_sub.update_layout(
             title=f"Podkategorie dla: {sel}",
-            height=450,
+            height=500,
             showlegend=False,
-            paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
-            uniformtext_minsize=8, uniformtext_mode='hide',
-            margin=dict(l=10,r=10,t=40,b=10)
+            paper_bgcolor='#111',
+            plot_bgcolor='#111',
+            font_color='white',
+            margin=dict(l=100, r=100, t=40, b=100)
         )
         st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False}, key="sub")
 
