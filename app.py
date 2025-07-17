@@ -73,15 +73,16 @@ class Categorizer:
         idx, score = int(np.argmax(sims)), sims.max()
         if score > 0.5:
             return tuple(CATEGORY_PAIRS[idx].split(" — "))
-        return ('Przychody','Inne') if amt>=0 else ('Inne',CATEGORIES['Inne'][0])
+        return ('Przychody','Inne') if amt>=0 else ('Inne', CATEGORIES['Inne'][0])
     def assign(self, key, cat, sub):
         kc = clean_desc(key)
         if not kc: return
         self.map[kc] = (cat, sub)
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        pd.DataFrame([{"description":k,"category":c,"subcategory":s}
-                      for k,(c,s) in self.map.items()]) \
-          .to_csv(ASSIGNMENTS_FILE, index=False)
+        pd.DataFrame([
+            {"description": k, "category": c, "subcategory": s}
+            for k,(c,s) in self.map.items()
+        ]).to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------
 # 4) WCZYTANIE CSV
@@ -91,8 +92,8 @@ def load_bank_csv(u):
     raw = u.getvalue()
     for enc,sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
-            lines=raw.decode(enc,errors='ignore').splitlines()
-            idx=next(i for i,l in enumerate(lines) if 'Data' in l and 'Kwota' in l)
+            lines = raw.decode(enc,errors='ignore').splitlines()
+            idx = next(i for i,l in enumerate(lines) if 'Data' in l and 'Kwota' in l)
             return pd.read_csv(io.StringIO("\n".join(lines[idx:])), sep=sep, decimal=',')
         except:
             pass
@@ -114,7 +115,7 @@ def main():
     st.title("🗂 Kategoryzator transakcji + Raporty")
     cat = Categorizer()
 
-    # --- Wczytanie pliku ---
+    # --- Wczytanie i wstępne przygotowanie df_full ---
     st.sidebar.header("Filtr dat")
     up = st.sidebar.file_uploader("CSV banku", type="csv")
     if not up:
@@ -124,7 +125,6 @@ def main():
     except Exception as e:
         st.error(str(e)); return
 
-    # --- Przygotuj df_full (historyczne, do YTD i raportu) ---
     df_full = df_raw.copy()
     df_full.columns = [c.strip() for c in df_full.columns]
     df_full = df_full.rename(columns={
@@ -138,10 +138,10 @@ def main():
     df_full['category']    = df_full['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df_full['subcategory'] = df_full['key'].map(lambda k: cat.map.get(k,("",""))[1])
 
-    # --- Filtrowanie do głównego df ---
+    # --- Filtr sidebar dla df (do raportu i tabeli) ---
     df = df_full.copy()
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
-    if mode=="Zakres dat":
+    if mode == "Zakres dat":
         mn,mx = df['Date'].min(), df['Date'].max()
         d0,d1 = st.sidebar.date_input("Zakres dat", [mn.date(), mx.date()], min_value=mn.date(), max_value=mx.date())
         start = datetime.combine(d0, datetime.min.time())
@@ -149,12 +149,12 @@ def main():
         df = df[(df['Date']>=start)&(df['Date']<=end)]
     else:
         yrs = sorted(df['Date'].dt.year.unique())
-        meses = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',
-                 6:'Czerwiec',7:'Lipiec',8:'Sierpień',9:'Wrzesień',
-                 10:'Październik',11:'Listopad',12:'Grudzień'}
+        months = {1:'Styczeń',2:'Luty',3:'Marzec',4:'Kwiecień',5:'Maj',
+                  6:'Czerwiec',7:'Lipiec',8:'Sierpień',9:'Wrzesień',
+                  10:'Październik',11:'Listopad',12:'Grudzień'}
         y = st.sidebar.selectbox("Rok", yrs, index=len(yrs)-1)
-        mname = st.sidebar.selectbox("Miesiąc", list(meses.values()), index=6)
-        m = {v:k for k,v in meses.items()}[mname]
+        mname = st.sidebar.selectbox("Miesiąc", list(months.values()), index=6)
+        m = {v:k for k,v in months.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
     # --- Bulk‑assign ---
@@ -166,7 +166,8 @@ def main():
         amt = df.loc[idxs[0],'Amount']
         st.write(f"**{key}** – {amt:.2f} PLN")
         s = cat.suggest(key, amt)
-        sc = st.selectbox("Kategoria", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
+        sc = st.selectbox("Kategoria", list(CATEGORIES.keys()),
+                          index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
         ss = st.selectbox("Podkategoria", CATEGORIES[sc],
                           index=CATEGORIES[sc].index(s[1]) if s[1] in CATEGORIES[sc] else 0,
                           key=f"sub_{key}")
@@ -174,7 +175,7 @@ def main():
 
     st.markdown("---"); st.success("Zapis assignments.csv")
 
-    # --- Tabela z dropdownami ---
+    # --- Edytowalna tabela ---
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("",""))[1])
     final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
@@ -183,7 +184,9 @@ def main():
         final,
         column_config={
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
-            'subcategory': st.column_config.SelectboxColumn("Podkategoria", options=[s for subs in CATEGORIES.values() for s in subs])
+            'subcategory': st.column_config.SelectboxColumn(
+                "Podkategoria", options=[s for subs in CATEGORIES.values() for s in subs]
+            )
         },
         hide_index=True,
         use_container_width=True
@@ -194,24 +197,21 @@ def main():
             cat.assign(keys[i], row.category, row.subcategory)
         st.success("Zapisano assignments.csv")
 
-    # --- Raport i YTD obok siebie ---
+    # --- Raport (z filtrowanego df) i Oszczędności YTD obok siebie ---
     colA, colB = st.columns(2, gap="medium")
-
-    # RAPORT (na podstawie df_full, czyli pełnych danych)
+    # RAPORT
     with colA:
-        rt = df_full.copy()
-        # oblicz tylko dla filtrowanego roku lub wszystkich lat?
-        # tu robię dla całego zakresu, jak YTD
+        ed = edited.copy()
         order = ['Przychody'] + sorted([c for c in CATEGORIES if c!='Przychody'])
         total = pd.DataFrame({'category':order,'sum':0.0,'count':0}).set_index('category')
-        if not rt.empty:
-            inc = rt[(rt['category']=='Przychody')&(rt['Amount']>0)].groupby('category')['Amount'].agg(['sum','count'])
-            exp = rt[(rt['category']!='Przychody')&(rt['Amount']<0)].groupby('category')['Amount'].agg(['sum','count'])
+        if not ed.empty:
+            inc = ed[(ed.category=='Przychody')&(ed.Amount>0)].groupby('category')['Amount'].agg(['sum','count'])
+            exp = ed[(ed.category!='Przychody')&(ed.Amount<0)].groupby('category')['Amount'].agg(['sum','count'])
             total.update(pd.concat([inc,exp]))
         total = total.reset_index()
         total['count'] = total['count'].astype(int)
         total = total[total['count']>0]
-        grouped = rt.groupby(['category','subcategory'])['Amount'].agg(['sum','count']).reset_index()
+        grouped = ed.groupby(['category','subcategory'])['Amount'].agg(['sum','count']).reset_index()
 
         st.markdown("## 📊 Raport: ilość i suma wg kategorii")
         fmt = lambda v: f"{abs(v):,.2f}".replace(",", " ")
@@ -220,34 +220,34 @@ def main():
             with st.expander(lbl, expanded=False):
                 subs = grouped[grouped['category']==r['category']]
                 for __,s in subs.iterrows():
-                    st.markdown(f"• **{s['subcategory']}** ({int(s['count'])}) – {fmt(s['sum'])}", unsafe_allow_html=True)
-
-    # OSZCZĘDNOŚCI YTD (pełne dane)
+                    st.markdown(f"• **{s['subcategory']}** ({int(s['count'])}) – {fmt(s['sum'])}",
+                                unsafe_allow_html=True)
+    # OSZCZĘDNOŚCI YTD (pełne df_full)
     with colB:
         st.markdown(f"## 💰 Oszczędności YTD ({datetime.now().year})")
         ytd = df_full[(df_full['category']=='Oszczędności') & (df_full['Date'].dt.year==datetime.now().year)]
         total_ytd = ytd['Amount'].sum()
-        st.markdown(f"**Łącznie: {total_ytd:,.2f} zł**".replace(",", " "))
+        st.markdown(f"**Łącznie: {total_ytd:,.2f} zł**".replace(",", " "))
         sub = ytd.groupby('subcategory')['Amount'].sum().reset_index().sort_values('Amount', ascending=False)
         for _,r in sub.iterrows():
             pct = (r['Amount']/total_ytd) if total_ytd else 0
-            lbl = f"{r['subcategory']} ({pct:.0%}) – {r['Amount']:,.2f} zł"
+            lbl = f"{r['subcategory']} ({pct:.0%}) – {r['Amount']:,.2f} zł"
             with st.expander(lbl, expanded=False):
-                st.write(f"- {r['subcategory']}: {r['Amount']:,.2f} zł ({pct:.0%})")
+                st.write(f"- {r['subcategory']}: {r['Amount']:,.2f} zł ({pct:.0%})")
 
-    # --- DRILL‑DOWN wykresy kołowe ---
+    # --- Wykresy kołowe z przyciskami drill‑down obok ---
     st.markdown("## 📈 Wykresy kołowe")
-    # wybór kategorii jako przyciski w pionie
+    # kolumny: wykres i przyciski
+    ch_col, btn_col = st.columns([3,1], gap="small")
+    # przyciski w btn_col
     if 'selected_cat' not in st.session_state:
         st.session_state['selected_cat'] = None
-    st.markdown("**Kliknij kategorię, by zobaczyć podkategorie:**")
+    btn_col.markdown("**Wybierz kategorię:**")
     for cat_name in total['category']:
-        if st.button(cat_name, key=f"btn_{cat_name}"):
+        if btn_col.button(cat_name, key=f"btn_{cat_name}"):
             st.session_state['selected_cat'] = cat_name
-    if st.button("Resetuj wybór"):
+    if btn_col.button("Resetuj", key="btn_reset"):
         st.session_state['selected_cat'] = None
-
-    sel = st.session_state['selected_cat']
 
     # wykres kategorii
     tot = total.copy()
@@ -257,16 +257,17 @@ def main():
         marker=dict(colors=colors, line=dict(color='#111', width=3)),
         hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
         textposition='outside',
-        texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+        texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
         textfont=dict(size=14, color='white'),
         pull=[0.02]*len(tot), hoverinfo='none'
     )])
-    fig_cat.update_layout(height=450, showlegend=False,
+    fig_cat.update_layout(height=400, showlegend=False,
                           paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
                           margin=dict(l=80,r=80,t=40,b=80))
-    st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
+    ch_col.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
 
     # wykres podkategorii
+    sel = st.session_state['selected_cat']
     if sel:
         sub = grouped[grouped['category']==sel].copy()
         title = f"Podkategorie: {sel}"
@@ -278,16 +279,15 @@ def main():
         marker=dict(line=dict(color='#111', width=2)),
         hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
         textposition='outside',
-        texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+        texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
         textfont=dict(size=14, color='white'),
         pull=[0.02]*len(sub), hoverinfo='none'
     )])
-    fig_sub.update_layout(title=title, height=450,
+    fig_sub.update_layout(title=title, height=400,
                           showlegend=False,
                           paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
                           margin=dict(l=80,r=80,t=40,b=80))
     st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False})
-
 
 if __name__=="__main__":
     main()
