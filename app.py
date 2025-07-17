@@ -6,6 +6,7 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 import plotly.graph_objects as go
+import plotly.express as px
 from datetime import datetime
 import time
 
@@ -69,12 +70,11 @@ class Categorizer:
         if kc in self.map and self.map[kc][0]:
             return self.map[kc]
         
-        # Ulepszone sugerowanie dla transakcji ujemnych
         if amt < 0:
             emb = get_embed_model().encode([key], convert_to_numpy=True)
             sims = cosine_similarity(emb, get_pair_embs())[0]
             idx, score = int(np.argmax(sims)), sims.max()
-            if score > 0.4:  # Obniżony próg dla wydatków
+            if score > 0.4:
                 return tuple(CATEGORY_PAIRS[idx].split(" — "))
             return ('Inne', CATEGORIES['Inne'][0])
         else:
@@ -89,26 +89,24 @@ class Categorizer:
           .to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------
-# 4) WCZYTANIE CSV (POPRAWIONA)
+# 4) WCZYTANIE CSV
 # ------------------------
 def load_bank_csv(u):
     raw = u.getvalue()
     for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             txt = raw.decode(enc, errors='ignore').splitlines()
-            # POPRAWIAMY WYRAŻENIE GENERATORA
             header_idx = next(
                 (i for i, l in enumerate(txt) 
-                 if 'data' in l.lower() and 
-                 ('transakcji' in l.lower() or 'księgow' in l.lower())
-                ), 
+                if 'data' in l.lower() and 
+                ('transakcji' in l.lower() or 'księgow' in l.lower())
+                , 
                 None
             )
             
             if header_idx is None:
                 continue
                 
-            # Poprawne wczytywanie nagłówków
             content = "\n".join(txt[header_idx:])
             df = pd.read_csv(io.StringIO(content), 
                             sep=sep, 
@@ -116,10 +114,9 @@ def load_bank_csv(u):
                             thousands=' ',
                             header=0)
             
-            # Poprawne mapowanie kolumn
             col_map = {}
             for col in df.columns:
-                lc = str(col).lower()  # Konwersja na string
+                lc = str(col).lower()
                 if 'data transakcji' in lc: 
                     col_map[col] = 'Date'
                 elif 'data księgowania' in lc: 
@@ -134,6 +131,9 @@ def load_bank_csv(u):
                     col_map[col] = 'Amount'
                 elif 'saldo po transakcji' in lc: 
                     col_map[col] = 'Balance_After'
+                # Dodajemy mapowanie dla kwoty blokady
+                elif 'blok' in lc or 'zwolni' in lc:
+                    col_map[col] = 'Blocked_Amount'
             
             return df.rename(columns=col_map)
         except Exception as e:
@@ -153,6 +153,16 @@ def main():
     }
     .stDataFrame, .stTable {
         background-color: #1e2130 !important;
+    }
+    .st-expander {
+        background: #1e2130;
+        border: 1px solid #444;
+        border-radius: 5px;
+        margin-bottom: 10px;
+    }
+    .st-expander .streamlit-expanderHeader {
+        font-weight: bold;
+        color: #7fd8be;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -174,19 +184,16 @@ def main():
             st.error(f"Błąd: {str(e)}")
             return
 
-    # Sprawdzenie wymaganych kolumn
     required_cols = ['Date', 'Amount']
     if not all(col in df0.columns for col in required_cols):
         missing = [col for col in required_cols if col not in df0.columns]
         st.error(f"Brak wymaganych kolumn: {', '.join(missing)}")
         return
 
-    # Przygotowanie danych
     df_full = df0.copy()
     df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce', dayfirst=True)
     df_full = df_full[df_full['Date'].notna()]
     
-    # Tworzenie klucza do kategoryzacji
     desc_col = 'Counterparty' if 'Counterparty' in df_full.columns else 'Title'
     if desc_col not in df_full.columns:
         st.error("Brak kolumny z opisem transakcji")
@@ -195,7 +202,6 @@ def main():
     df_full['key'] = (df_full[desc_col].astype(str) + '|' + 
                      df_full.get('Account_Number', '').astype(str)).map(clean_desc)
     
-    # Przypisanie początkowych kategorii
     for key in df_full['key'].unique():
         if key not in cat.map:
             amt = df_full.loc[df_full['key'] == key, 'Amount'].iloc[0]
@@ -227,7 +233,13 @@ def main():
         month = next(k for k, v in months.items() if v == month_name)
         df = df[(df['Date'].dt.year == year) & (df['Date'].dt.month == month)]
 
-    # 3) Przypisanie kategorii
+    # 3) Tworzenie kolumny Kwota - używamy Amount lub Blocked_Amount
+    if 'Blocked_Amount' in df.columns:
+        df['Kwota'] = df['Amount'].fillna(df['Blocked_Amount'])
+    else:
+        df['Kwota'] = df['Amount']
+    
+    # 4) Przypisanie kategorii
     st.markdown("#### Krok 1: Przypisz kategorie")
     keys_to_assign = [k for k in df['key'].unique() if not cat.map.get(k, ("", ""))[0]]
     
@@ -235,7 +247,7 @@ def main():
         st.info("Wszystkie transakcje mają już przypisane kategorie.")
     else:
         for key in keys_to_assign:
-            amt = df.loc[df['key'] == key, 'Amount'].iloc[0]
+            amt = df.loc[df['key'] == key, 'Kwota'].iloc[0]
             st.write(f"**{key}** – {amt:.2f} PLN")
             col1, col2 = st.columns(2)
             with col1:
@@ -245,23 +257,20 @@ def main():
                 sub_val = st.selectbox("Podkategoria", CATEGORIES[cat_val],
                                       key=f"sub_{key}")
             cat.assign(key, cat_val, sub_val)
-            time.sleep(0.1)  # Zapobieganie błędom interfejsu
+            time.sleep(0.1)
 
-    # 4) Tabela transakcji
+    # 5) Tabela transakcji - pokazujemy tylko Kwotę
     st.markdown("## 🗃️ Tabela transakcji")
     df['category'] = df['key'].map(lambda k: cat.map.get(k, ("", ""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k, ("", ""))[1])
     
-    cols_to_show = ['Date', desc_col, 'Amount', 'category', 'subcategory']
-    if 'Balance_After' in df.columns:
-        cols_to_show.append('Balance_After')
+    cols_to_show = ['Date', desc_col, 'Kwota', 'category', 'subcategory']
     
     edited = st.data_editor(
         df[cols_to_show],
         column_config={
             'Date': st.column_config.DateColumn("Data", format="DD.MM.YYYY"),
-            'Amount': st.column_config.NumberColumn("Kwota", format="%.2f PLN"),
-            'Balance_After': st.column_config.NumberColumn("Saldo", format="%.2f PLN"),
+            'Kwota': st.column_config.NumberColumn("Kwota", format="%.2f PLN"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn("Podkategoria", 
                 options=[sub for subs in CATEGORIES.values() for sub in subs])
@@ -277,71 +286,135 @@ def main():
             cat.assign(key, row['category'], row['subcategory'])
         st.success("Zapisano zmiany kategorii")
 
-    # 5) Raporty
+    # 6) Raporty - w stylu poprzedniej wersji
     st.markdown("## 📊 Raporty podsumowujące")
     
     # Przygotowanie danych do raportów
     report_df = edited.copy()
-    report_df['Kwota'] = report_df['Amount'].abs()
-    report_df['Typ'] = report_df['Amount'].apply(lambda x: 'Przychód' if x > 0 else 'Wydatek')
     
-    # Podsumowanie ogólne
-    col1, col2 = st.columns(2)
+    # Funkcja formatująca kwoty
+    fmt = lambda v: f"{abs(v):,.2f} zł".replace(",", " ").replace(".", ",")
+    
+    # Lewa kolumna - podsumowanie z rozbiciem na podkategorie
+    col1, col2 = st.columns(2, gap="medium")
+    
     with col1:
-        st.markdown("### Podsumowanie finansowe")
-        total_income = report_df[report_df['Typ'] == 'Przychód']['Kwota'].sum()
-        total_expense = report_df[report_df['Typ'] == 'Wydatek']['Kwota'].sum()
-        balance = total_income - total_expense
+        st.markdown("### Podsumowanie kategorii")
         
-        st.metric("Przychody", f"{total_income:,.2f} PLN")
-        st.metric("Wydatki", f"{total_expense:,.2f} PLN")
-        st.metric("Bilans", f"{balance:,.2f} PLN", 
-                 delta_color="inverse" if balance < 0 else "normal")
+        # Grupowanie po kategoriach
+        category_summary = report_df.groupby('category')['Kwota'].agg(['sum', 'count']).reset_index()
+        
+        for _, cat_row in category_summary.iterrows():
+            category = cat_row['category']
+            total = cat_row['sum']
+            count = cat_row['count']
+            
+            with st.expander(f"{category} ({count}) - {fmt(total)}"):
+                # Grupowanie po podkategoriach dla danej kategorii
+                subcat_df = report_df[report_df['category'] == category]
+                subcat_summary = subcat_df.groupby('subcategory')['Kwota'].agg(['sum', 'count'])
+                
+                for subcat, row in subcat_summary.iterrows():
+                    st.markdown(f"**{subcat}** ({row['count']}) - {fmt(row['sum'])}")
+                
+                # Szczegóły transakcji
+                st.markdown("---")
+                st.markdown("**Transakcje:**")
+                for _, txn in subcat_df.iterrows():
+                    date_str = txn['Date'].strftime("%d.%m.%Y")
+                    st.markdown(f"{date_str} - {txn[desc_col]} - {fmt(txn['Kwota'])}")
 
     with col2:
         st.markdown("### Oszczędności")
         savings = report_df[report_df['category'] == 'Oszczędności']
+        
         if not savings.empty:
             total_savings = savings['Kwota'].sum()
-            st.metric("Łączne oszczędności", f"{total_savings:,.2f} PLN")
+            st.metric("Łączne oszczędności", f"{total_savings:,.2f} PLN".replace(",", " "))
             
-            savings_by_type = savings.groupby('subcategory')['Kwota'].sum()
+            # Podział na typy oszczędności
+            savings_by_type = savings.groupby('subcategory')['Kwota'].sum().reset_index()
+            
+            for _, row in savings_by_type.iterrows():
+                st.markdown(f"**{row['subcategory']}** - {fmt(row['Kwota'])}")
+            
+            # Wykres kołowy oszczędności
             fig = go.Figure(data=[go.Pie(
-                labels=savings_by_type.index,
-                values=savings_by_type.values,
+                labels=savings_by_type['subcategory'],
+                values=savings_by_type['Kwota'].abs(),
                 hole=0.4,
                 marker_colors=px.colors.qualitative.Pastel
             )])
-            fig.update_layout(showlegend=True, height=300)
+            fig.update_layout(
+                title="Podział oszczędności",
+                showlegend=True,
+                height=300,
+                margin=dict(l=20, r=20, t=40, b=20)
+            )
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Brak transakcji oszczędnościowych")
+            st.info("Brak transakcji oszczędnościowych w wybranym okresie")
 
-    # Wykresy kategorii
-    st.markdown("### Rozkład wydatków")
-    expense_df = report_df[report_df['Typ'] == 'Wydatek']
+    # 7) Wykresy kategorii z funkcją drill-down
+    st.markdown("## 📈 Wykresy kategorii")
     
-    if not expense_df.empty:
-        by_category = expense_df.groupby('category')['Kwota'].sum().reset_index()
-        by_subcategory = expense_df.groupby(['category', 'subcategory'])['Kwota'].sum().reset_index()
+    # Przygotowanie danych
+    expenses = report_df[report_df['Kwota'] < 0]
+    expenses['Kwota_abs'] = expenses['Kwota'].abs()
+    
+    if not expenses.empty:
+        # Wykres kategorii
+        st.markdown("### Wydatki według kategorii")
         
-        tab1, tab2 = st.tabs(["Według kategorii", "Według podkategorii"])
+        # Tworzenie przycisków do drill-down
+        categories = expenses['category'].unique()
+        if 'selected_category' not in st.session_state:
+            st.session_state.selected_category = None
+            
+        cols = st.columns(len(categories) + 1)
+        for i, cat in enumerate(categories):
+            if cols[i].button(cat):
+                st.session_state.selected_category = cat
+        if cols[-1].button("Wszystkie"):
+            st.session_state.selected_category = None
         
-        with tab1:
-            fig = px.bar(by_category, x='category', y='Kwota', 
-                         text='Kwota', color='category',
-                         labels={'Kwota': 'Suma wydatków', 'category': 'Kategoria'})
-            fig.update_traces(texttemplate='%{text:,.2f} PLN', textposition='outside')
-            fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+        # Filtrowanie danych
+        if st.session_state.selected_category:
+            chart_data = expenses[expenses['category'] == st.session_state.selected_category]
+            group_col = 'subcategory'
+            title = f"Wydatki: {st.session_state.selected_category}"
+        else:
+            chart_data = expenses
+            group_col = 'category'
+            title = "Wszystkie wydatki"
         
-        with tab2:
-            fig = px.treemap(by_subcategory, 
-                            path=['category', 'subcategory'], 
-                            values='Kwota',
-                            color='category')
-            fig.update_traces(textinfo="label+value+percent parent")
-            st.plotly_chart(fig, use_container_width=True)
+        # Grupowanie danych
+        grouped = chart_data.groupby(group_col)['Kwota_abs'].sum().reset_index()
+        grouped = grouped.sort_values('Kwota_abs', ascending=False)
+        
+        # Wykres słupkowy
+        fig = px.bar(
+            grouped,
+            x=group_col,
+            y='Kwota_abs',
+            text='Kwota_abs',
+            title=title,
+            labels={'Kwota_abs': 'Kwota (PLN)', group_col: 'Kategoria'},
+            color=group_col
+        )
+        fig.update_traces(
+            texttemplate='%{text:.2f} zł',
+            textposition='outside',
+            marker_line_color='black',
+            marker_line_width=1
+        )
+        fig.update_layout(
+            uniformtext_minsize=8,
+            xaxis_tickangle=45,
+            showlegend=False,
+            height=500
+        )
+        st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("Brak danych o wydatkach w wybranym okresie")
 
