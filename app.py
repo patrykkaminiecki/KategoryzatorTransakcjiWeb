@@ -290,8 +290,9 @@ def main():
             paper_bgcolor='#111',
             plot_bgcolor='#111',
             font_color='white',
-            uniformtext_minsize=8, uniformtext_mode='hide',
-            automargin=True
+            uniformtext_minsize=8,
+            uniformtext_mode='hide',
+            margin=dict(l=20, r=20, t=20, b=20)
         )
         st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False})
 
