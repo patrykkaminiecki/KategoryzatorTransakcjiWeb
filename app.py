@@ -213,8 +213,18 @@ def main():
 
     # Uporządkuj kategorie: Przychody pierwsze, reszta alfabetycznie
     order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
-    all_categories = pd.Index(order)
-    total = total.set_index('category').reindex(all_categories, fill_value=0).reset_index()
+    
+    # Użyj `pd.Categorical` dla stabilnego sortowania i kompletności danych
+    total['category'] = pd.Categorical(total['category'], categories=order, ordered=True)
+    total = total.sort_values('category')
+    
+    # Uzupełnij brakujące kategorie z zerowymi wartościami
+    missing_cats = set(order) - set(total['category'])
+    if missing_cats:
+        missing_df = pd.DataFrame([{'category': cat, 'sum': 0, 'count': 0} for cat in missing_cats])
+        total = pd.concat([total, missing_df], ignore_index=True)
+    
+    total = total.sort_values('category').reset_index(drop=True)
     total['count'] = total['count'].astype(int)
 
     # Agregacja podkategorii
