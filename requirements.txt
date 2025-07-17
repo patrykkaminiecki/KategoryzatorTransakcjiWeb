@@ -4,3 +4,4 @@ rapidfuzz
 gitpython        # jeśli chcesz auto‑push
 sentence-transformers
 scikit-learn
+plotly
