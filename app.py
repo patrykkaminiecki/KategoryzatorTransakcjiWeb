@@ -294,6 +294,5 @@ def main():
         )
         st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
 
-        )
 if __name__ == "__main__":
     main()
