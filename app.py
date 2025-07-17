@@ -278,13 +278,15 @@ def main():
             values=total_sorted['sum'].abs(),
             marker_colors=colors,
             textposition='auto',
-            texttemplate='%{label}<br>%{percent:.2%}<br>%{value:,.2f} zł'.replace(",", " ").replace(".", ","),
-            hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.2%}<extra></extra>'.replace(",", " ").replace(".", ","),
-            textfont=dict(size=13, family='Arial'),
+            texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+            hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.0%}<extra></extra>',
+            textfont=dict(size=12, family='Arial'),
             hole=.3
         )])
+        fig_cat.update_traces(texttemplate=fig_cat.data[0].texttemplate.replace(",", " ").replace(".", ","), 
+                              hovertemplate=fig_cat.data[0].hovertemplate.replace(",", " ").replace(".", ","))
         fig_cat.update_layout(
-            height=400, margin=dict(l=20, r=20, t=20, b=20),
+            height=350, margin=dict(l=20, r=20, t=20, b=20),
             showlegend=False,
             paper_bgcolor='#111',
             plot_bgcolor='#111',
@@ -317,14 +319,16 @@ def main():
                 labels=sub['subcategory'],
                 values=sub['sum'].abs(),
                 textposition='auto',
-                texttemplate='%{label}<br>%{percent:.2%}<br>%{value:,.2f} zł'.replace(",", " ").replace(".", ","),
-                hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.2%}<extra></extra>'.replace(",", " ").replace(".", ","),
-                textfont=dict(size=13, family='Arial'),
+                texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+                hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.0%}<extra></extra>',
+                textfont=dict(size=12, family='Arial'),
                 hole=.3
             )])
+            fig_sub.update_traces(texttemplate=fig_sub.data[0].texttemplate.replace(",", " ").replace(".", ","),
+                                  hovertemplate=fig_sub.data[0].hovertemplate.replace(",", " ").replace(".", ","))
             fig_sub.update_layout(
                 title=f"Podkategorie dla: {selected}",
-                height=400, margin=dict(l=20, r=20, t=40, b=20),
+                height=350, margin=dict(l=20, r=20, t=40, b=20),
                 showlegend=False,
                 paper_bgcolor='#111',
                 plot_bgcolor='#111',
