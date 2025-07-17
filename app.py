@@ -96,16 +96,19 @@ def load_bank_csv(u):
     for enc, sep in [('cp1250',';'),('utf-8',';'),('utf-8',',')]:
         try:
             txt = raw.decode(enc, errors='ignore').splitlines()
-            # POPRAWIONA LINIA: usunięto błędny nawias i uproszczono warunek
-            header_idx = next((i for i, l in enumerate(txt) 
-                             if 'data' in l.lower() and 
-                             ('transakcji' in l.lower() or 'księgow' in l.lower()), None)
+            # POPRAWIAMY WYRAŻENIE GENERATORA
+            header_idx = next(
+                (i for i, l in enumerate(txt) 
+                 if 'data' in l.lower() and 
+                 ('transakcji' in l.lower() or 'księgow' in l.lower())
+                ), 
+                None
+            )
             
             if header_idx is None:
                 continue
                 
             # Poprawne wczytywanie nagłówków
-            header = txt[header_idx].split(sep)
             content = "\n".join(txt[header_idx:])
             df = pd.read_csv(io.StringIO(content), 
                             sep=sep, 
@@ -116,14 +119,21 @@ def load_bank_csv(u):
             # Poprawne mapowanie kolumn
             col_map = {}
             for col in df.columns:
-                lc = str(col).lower()  # Dodano konwersję na string
-                if 'data transakcji' in lc: col_map[col] = 'Date'
-                elif 'data księgowania' in lc: col_map[col] = 'Accounting_Date'
-                elif 'dane kontrahenta' in lc: col_map[col] = 'Counterparty'
-                elif 'tytuł' in lc: col_map[col] = 'Title'
-                elif 'nr rachunku' in lc: col_map[col] = 'Account_Number'
-                elif 'kwota transakcji' in lc: col_map[col] = 'Amount'
-                elif 'saldo po transakcji' in lc: col_map[col] = 'Balance_After'
+                lc = str(col).lower()  # Konwersja na string
+                if 'data transakcji' in lc: 
+                    col_map[col] = 'Date'
+                elif 'data księgowania' in lc: 
+                    col_map[col] = 'Accounting_Date'
+                elif 'dane kontrahenta' in lc: 
+                    col_map[col] = 'Counterparty'
+                elif 'tytuł' in lc: 
+                    col_map[col] = 'Title'
+                elif 'nr rachunku' in lc: 
+                    col_map[col] = 'Account_Number'
+                elif 'kwota transakcji' in lc: 
+                    col_map[col] = 'Amount'
+                elif 'saldo po transakcji' in lc: 
+                    col_map[col] = 'Balance_After'
             
             return df.rename(columns=col_map)
         except Exception as e:
