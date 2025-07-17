@@ -302,7 +302,6 @@ def main():
             paper_bgcolor='#111',
             bargap=0.15
         )
-        from streamlit_plotly_events import plotly_events
         selected_points = plotly_events(
             fig_cat,
             click_event=True,
@@ -318,24 +317,8 @@ def main():
             selected = st.session_state['selected_category']
         else:
             selected = None
-        from streamlit_plotly_events import plotly_events
-        selected_points = plotly_events(
-            fig_cat,
-            click_event=True,
-            select_event=False,
-            hover_event=False,
-            override_height=400,
-            override_width="100%"
-        )
-        if selected_points:
-            selected = total_sorted['category'][selected_points[0]['pointIndex']]
-            st.session_state['selected_category'] = selected
-        elif 'selected_category' in st.session_state and st.session_state['selected_category']:
-            selected = st.session_state['selected_category']
-        else:
-            selected = None
     with col2:
-        if 'selected' in locals() and selected:
+        if selected:
             st.markdown(f"#### Szczegóły: {selected}")
             sub = grouped[grouped['category'] == selected].copy()
             sub['subcategory'] = sub['subcategory'].fillna('brak')
@@ -397,7 +380,7 @@ if __name__ == "__main__":
     import streamlit as st
     st.set_page_config(page_title="Kategoryzator Finansowy", layout="wide")
     # Lekki custom CSS na tło i fonty
-    st.markdown('''
+{{ ... }}
         <style>
         body { background-color: #18191A; color: #fff; }
         .stApp { background-color: #18191A; }
