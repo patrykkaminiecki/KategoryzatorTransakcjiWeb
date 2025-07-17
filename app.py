@@ -278,19 +278,19 @@ def main():
             values=total_sorted['sum'].abs(),
             marker_colors=colors,
             textposition='auto',
-            texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+            texttemplate='%{label}<br>%{percent:.0%}',
             hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.0%}<extra></extra>',
-            textfont=dict(size=12, family='Arial'),
-            hole=.3
+            textfont=dict(size=11, family='Arial'),
+            hole=.4,
+            domain=dict(x=[0.1, 0.9], y=[0.1, 0.9])
         )])
-        fig_cat.update_traces(texttemplate=fig_cat.data[0].texttemplate.replace(",", " ").replace(".", ","), 
-                              hovertemplate=fig_cat.data[0].hovertemplate.replace(",", " ").replace(".", ","))
         fig_cat.update_layout(
-            height=350, margin=dict(l=20, r=20, t=20, b=20),
+            height=350, margin=dict(l=10, r=10, t=20, b=10),
             showlegend=False,
             paper_bgcolor='#111',
             plot_bgcolor='#111',
-            font_color='white'
+            font_color='white',
+            uniformtext_minsize=8, uniformtext_mode='hide'
         )
         st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False})
 
@@ -319,20 +319,20 @@ def main():
                 labels=sub['subcategory'],
                 values=sub['sum'].abs(),
                 textposition='auto',
-                texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+                texttemplate='%{label}<br>%{percent:.0%}',
                 hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.0%}<extra></extra>',
-                textfont=dict(size=12, family='Arial'),
-                hole=.3
+                textfont=dict(size=11, family='Arial'),
+                hole=.4,
+                domain=dict(x=[0.1, 0.9], y=[0.1, 0.9])
             )])
-            fig_sub.update_traces(texttemplate=fig_sub.data[0].texttemplate.replace(",", " ").replace(".", ","),
-                                  hovertemplate=fig_sub.data[0].hovertemplate.replace(",", " ").replace(".", ","))
             fig_sub.update_layout(
                 title=f"Podkategorie dla: {selected}",
-                height=350, margin=dict(l=20, r=20, t=40, b=20),
+                height=350, margin=dict(l=10, r=10, t=40, b=10),
                 showlegend=False,
                 paper_bgcolor='#111',
                 plot_bgcolor='#111',
-                font_color='white'
+                font_color='white',
+                uniformtext_minsize=8, uniformtext_mode='hide'
             )
             st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
         else:
