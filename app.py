@@ -380,7 +380,8 @@ if __name__ == "__main__":
     import streamlit as st
     st.set_page_config(page_title="Kategoryzator Finansowy", layout="wide")
     # Lekki custom CSS na tło i fonty
-{{ ... }}
+    st.markdown(
+        """
         <style>
         body { background-color: #18191A; color: #fff; }
         .stApp { background-color: #18191A; }
@@ -388,5 +389,7 @@ if __name__ == "__main__":
         .stDataFrame, .stTable { background: #222 !important; }
         .stMarkdown h2, .stMarkdown h3, .stMarkdown h1 { color: #7fd8be; font-weight: bold; }
         </style>
-    ''', unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True
+    )
     main()
