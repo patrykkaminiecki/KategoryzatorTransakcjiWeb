@@ -70,15 +70,15 @@ class Categorizer:
         emb = EMBED_MODEL.encode([key], convert_to_numpy=True)
         sims = cosine_similarity(emb, PAIR_EMBS)[0]
         idx, score = int(np.argmax(sims)), sims.max()
-        if score>0.5:
+        if score > 0.5:
             return tuple(CATEGORY_PAIRS[idx].split(" — "))
-        return ('Przychody','Inne') if amt>=0 else ('Inne',CATEGORIES['Inne'][0])
+        return ('Przychody','Inne') if amt >= 0 else ('Inne', CATEGORIES['Inne'][0])
     def assign(self, key, cat, sub):
         kc = clean_desc(key)
         if not kc: return
         self.map[kc] = (cat, sub)
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        pd.DataFrame([{'description':k,'category':c,'subcategory':s} for k,(c,s) in self.map.items()])\
+        pd.DataFrame([{'description':k,'category':c,'subcategory':s} for k,(c,s) in self.map.items()]) \
           .to_csv(ASSIGNMENTS_FILE, index=False)
 
 # ------------------------
@@ -135,10 +135,10 @@ def main():
         if 'blok' in lc: ren[col] = 'Kwota blokady'
     df_full = df0.rename(columns=ren).copy()
 
-    # sprawdź, czy mamy wymagane kolumny
+    # sprawdź kolumny
     for c in ['Date','Description','Nr rachunku','Amount']:
         if c not in df_full.columns:
-            st.error(f"Brak kolumny '{c}'. Sprawdź nagłówki.'); return
+            st.error(f"Brak kolumny '{c}'. Sprawdź nagłówki."); return
 
     df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce')
     df_full = df_full[df_full['Date'].notna()]
@@ -149,9 +149,9 @@ def main():
     # 2) Filtr do df (po sidebar)
     df = df_full.copy()
     mode = st.sidebar.radio("Tryb filtrowania", ["Zakres dat","Pełny miesiąc"])
-    if mode=="Zakres dat":
+    if mode == "Zakres dat":
         mn, mx = df['Date'].min(), df['Date'].max()
-        d0,d1 = st.sidebar.date_input("Zakres dat", [mn.date(), mx.date()], mn.date(), mx.date())
+        d0, d1 = st.sidebar.date_input("Zakres dat", [mn.date(), mx.date()], mn.date(), mx.date())
         start = datetime.combine(d0, datetime.min.time())
         end   = datetime.combine(d1, datetime.max.time())
         df = df[(df['Date']>=start)&(df['Date']<=end)]
@@ -172,7 +172,7 @@ def main():
         if cat.map.get(key,("", ""))[0]:
             continue
         amt = df.loc[idxs[0],'Amount']
-        st.write(f"**{key}** – {amt:.2f} PLN")
+        st.write(f"**{key}** – {amt:.2f} PLN")
         s = cat.suggest(key, amt)
         sc = st.selectbox("Kategoria", list(CATEGORIES.keys()),
                           index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
@@ -221,6 +221,7 @@ def main():
                 subs = grouped[grouped['category']==r['category']]
                 for __,s in subs.iterrows():
                     st.markdown(f"• **{s['subcategory']}** ({int(s['count'])}) – {fmt(s['sum'])}", unsafe_allow_html=True)
+
     with col2:
         st.markdown(f"## 💰 Oszczędności YTD ({datetime.now().year})")
         ytd = df_full[(df_full['category']=='Oszczędności') & (df_full['Date'].dt.year==datetime.now().year)]
@@ -243,11 +244,10 @@ def main():
     if btn_col.button("Resetuj", key="btnR"):
         st.session_state['sel'] = None
 
-    # wykres kategorii
     colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in total['category']]
     fig1 = go.Figure(data=[go.Pie(
         labels=total['category'], values=total['sum'].abs(),
-        marker=dict(colors=colors, line=dict(color='#111',width=3)),
+        marker=dict(colors=colors,line=dict(color='#111',width=3)),
         hole=0.3, domain=dict(x=[0.2,0.8],y=[0.2,0.8]),
         textposition='outside',
         texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
@@ -259,7 +259,6 @@ def main():
                        margin=dict(l=80,r=80,t=40,b=80))
     chart_col.plotly_chart(fig1, use_container_width=True, config={"displayModeBar":False})
 
-    # wykres podkategorii
     sel = st.session_state['sel']
     sub = grouped[grouped['category']==sel] if sel else grouped
     title = f"Podkategorie: {sel}" if sel else "Podkategorie: wszystkie"
