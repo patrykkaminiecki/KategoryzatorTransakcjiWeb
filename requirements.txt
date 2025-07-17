@@ -5,3 +5,4 @@ gitpython        # jeśli chcesz auto‑push
 sentence-transformers
 scikit-learn
 plotly
+streamlit_plotly_events
