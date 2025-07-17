@@ -268,10 +268,11 @@ def main():
             text=bar_text,
             textposition='inside',
             insidetextanchor='middle',
-            textfont=dict(color='white', size=16),
+            textangle=0,
+            textfont=dict(color='white', size=13, family='Arial'),
             hoverinfo='skip',
             hovertemplate=None,
-            width=0.6,
+            width=0.7,
             orientation='v',
         ))
         fig_cat.update_layout(
@@ -286,7 +287,7 @@ def main():
                 ticktext=total_sorted['category'],
                 tickangle=0,
                 color='white',
-                tickfont=dict(size=15, color='white'),
+                tickfont=dict(size=13, color='white', family='Arial'),
                 showgrid=False,
                 zeroline=False,
                 showline=False
@@ -299,8 +300,24 @@ def main():
             ),
             plot_bgcolor='#111',
             paper_bgcolor='#111',
-            bargap=0.2
+            bargap=0.15
         )
+        from streamlit_plotly_events import plotly_events
+        selected_points = plotly_events(
+            fig_cat,
+            click_event=True,
+            select_event=False,
+            hover_event=False,
+            override_height=300,
+            override_width="100%"
+        )
+        if selected_points:
+            selected = total_sorted['category'][selected_points[0]['pointIndex']]
+            st.session_state['selected_category'] = selected
+        elif 'selected_category' in st.session_state and st.session_state['selected_category']:
+            selected = st.session_state['selected_category']
+        else:
+            selected = None
         from streamlit_plotly_events import plotly_events
         selected_points = plotly_events(
             fig_cat,
@@ -336,7 +353,8 @@ def main():
                 text=bar_text_sub,
                 textposition='inside',
                 insidetextanchor='middle',
-                textfont=dict(color='white', size=16),
+                textangle=0,
+                textfont=dict(color='white', size=13, family='Arial'),
                 hoverinfo='skip',
                 hovertemplate=None,
             ))
@@ -353,7 +371,7 @@ def main():
                     ticktext=sub['subcategory'],
                     tickangle=0,
                     color='white',
-                    tickfont=dict(size=15, color='white'),
+                    tickfont=dict(size=13, color='white', family='Arial'),
                     showgrid=False,
                     zeroline=False,
                     showline=False
@@ -366,7 +384,7 @@ def main():
                 ),
                 plot_bgcolor='#111',
                 paper_bgcolor='#111',
-                bargap=0.2
+                bargap=0.15
             )
             st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
         else:
