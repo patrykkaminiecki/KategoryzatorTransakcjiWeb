@@ -245,7 +245,9 @@ def main():
         st.markdown("## 📊 Raport: ilość i suma wg kategorii")
         fmt = lambda v: f"{abs(v):,.2f}".replace(",", " ")
         for _,r in total.iterrows():
-            lbl = f"{r['category']} ({r['count']}) – {fmt(r['sum'])}"
+            # Oblicz rzeczywistą sumę dla kategorii z podkategorii
+            real_sum = grouped[grouped['category']==r['category']]['sum'].sum()
+            lbl = f"{r['category']} ({r['count']}) – {fmt(real_sum)}"
             with st.expander(lbl, expanded=False):
                 subs = grouped[grouped['category']==r['category']]
                 for __,s in subs.iterrows():
@@ -261,10 +263,7 @@ def main():
         sub = ytd.groupby('subcategory')['Effective_Amount'].sum().reset_index().sort_values('Effective_Amount', ascending=False)
         for _,r in sub.iterrows():
             pct = (r['Effective_Amount']/total_ytd) if total_ytd else 0
-            color = "green" if r['Effective_Amount'] >= 0 else "red"
-            lbl = f"{r['subcategory']} ({pct:.0%}) – <span style='color:{color}'>{abs(r['Effective_Amount']):,.2f} zł</span>"
-            with st.expander(lbl, expanded=False):
-                st.write(f"- {r['subcategory']}: {abs(r['Effective_Amount']):,.2f} zł ({pct:.0%})")
+            st.markdown(f"• **{r['subcategory']}** ({pct:.0%}) – {abs(r['Effective_Amount']):,.2f} zł".replace(",", " "))
 
     # --- DRILL‑DOWN wykresy kołowe ---
     st.markdown("## 📈 Wykresy kołowe")
