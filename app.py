@@ -259,15 +259,18 @@ def main():
 
     from streamlit_plotly_events import plotly_events
 
-    # Wykres kategorii - pionowe słupki, formatowanie jak w podkategoriach
+    # Wykres kategorii - pionowe słupki, czarne tło, styl jak podkategorie
     fig_cat = go.Figure()
+    # Formatowanie tekstu: białe, pogrubione
+    bar_text = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']]
     fig_cat.add_trace(go.Bar(
         x=total_sorted['category'],
         y=total_sorted['sum'],
         marker_color=colors,
-        text=[f"{v:,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']],
+        text=bar_text,
         textposition='inside',
         insidetextanchor='middle',
+        textfont=dict(color='white', size=18, family='Arial Black'),
         hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
         width=0.6,
         orientation='v',
@@ -282,9 +285,23 @@ def main():
             tickmode='array',
             tickvals=total_sorted['category'],
             ticktext=total_sorted['category'],
-            tickangle=0
+            tickangle=0,
+            color='white',
+            tickfont=dict(size=18, color='white', family='Arial Black'),
+            showgrid=False,
+            zeroline=False,
+            showline=False
         ),
-        plot_bgcolor='white',
+        yaxis=dict(
+            color='white',
+            tickfont=dict(size=16, color='white', family='Arial Black'),
+            showgrid=False,
+            zeroline=False,
+            showline=False,
+            tickformat=",.2f PLN"
+        ),
+        plot_bgcolor='#111',
+        paper_bgcolor='#111',
         bargap=0.2
     )
 
@@ -316,21 +333,46 @@ def main():
         color_scheme = green_shades if selected == 'Przychody' else red_shades
         bar_colors = [color_scheme[i % len(color_scheme)] for i in range(len(sub))]
         fig_sub = go.Figure()
+        bar_text_sub = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']]
         fig_sub.add_trace(go.Bar(
             x=sub['subcategory'],
             y=sub['sum'],
             marker_color=bar_colors,
-            text=[f"{v:,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']],
+            text=bar_text_sub,
             textposition='inside',
             insidetextanchor='middle',
+            textfont=dict(color='white', size=18, family='Arial Black'),
             hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
         ))
         fig_sub.update_layout(
             height=400,
             margin=dict(l=10, r=10, t=30, b=30),
-            xaxis_title=None, yaxis_title=None,
+            xaxis_title=None,
+            yaxis_title=None,
             showlegend=False,
-            title=f"🔍 Szczegóły: {selected}"
+            title=f"🔍 Szczegóły: {selected}",
+            xaxis=dict(
+                tickmode='array',
+                tickvals=sub['subcategory'],
+                ticktext=sub['subcategory'],
+                tickangle=0,
+                color='white',
+                tickfont=dict(size=18, color='white', family='Arial Black'),
+                showgrid=False,
+                zeroline=False,
+                showline=False
+            ),
+            yaxis=dict(
+                color='white',
+                tickfont=dict(size=16, color='white', family='Arial Black'),
+                showgrid=False,
+                zeroline=False,
+                showline=False,
+                tickformat=",.2f PLN"
+            ),
+            plot_bgcolor='#111',
+            paper_bgcolor='#111',
+            bargap=0.2
         )
         st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
 
