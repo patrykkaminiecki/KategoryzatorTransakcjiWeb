@@ -276,10 +276,10 @@ def main():
         fig_cat = go.Figure(data=[go.Pie(
             labels=total_sorted['category'],
             values=total_sorted['sum'].abs(),
-            marker_colors=colors,
+            marker=dict(colors=colors, line=dict(color='#111', width=3)),
             textposition='auto',
-            texttemplate='%{label}<br>%{percent:.0%}',
-            hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.0%}<extra></extra>',
+            texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+            hoverinfo='none',
             textfont=dict(size=11, family='Arial'),
             hole=.4,
             domain=dict(x=[0.1, 0.9], y=[0.1, 0.9])
@@ -318,9 +318,10 @@ def main():
             fig_sub = go.Figure(data=[go.Pie(
                 labels=sub['subcategory'],
                 values=sub['sum'].abs(),
+                marker=dict(line=dict(color='#111', width=2)),
                 textposition='auto',
-                texttemplate='%{label}<br>%{percent:.0%}',
-                hovertemplate='<b>%{label}</b><br>Suma: %{value:,.2f} zł<br>Udział: %{percent:.0%}<extra></extra>',
+                texttemplate='%{label}<br>%{percent:.0%}<br>%{value:,.2f} zł',
+                hoverinfo='none',
                 textfont=dict(size=11, family='Arial'),
                 hole=.4,
                 domain=dict(x=[0.1, 0.9], y=[0.1, 0.9])
