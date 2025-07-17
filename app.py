@@ -221,11 +221,14 @@ def main():
     total = total.reset_index()
     total['count'] = total['count'].astype(int)
 
+    # Usuń kategorie z zerową liczbą transakcji przed wyświetleniem
+    total = total[total['count'] > 0].reset_index(drop=True)
+
     # Agregacja podkategorii
     grouped = edited_df.groupby(['category', 'subcategory'])['Amount'].agg(['sum', 'count']).reset_index()
 
     # Sprawdź, czy są dane do wyświetlenia
-    if total.empty or total['count'].sum() == 0:
+    if total.empty:
         st.info("Brak danych do wyświetlenia w wybranym okresie.")
         return # Zakończ, jeśli nie ma co pokazywać
 
@@ -258,8 +261,8 @@ def main():
     import plotly.graph_objects as go
     from plotly.colors import qualitative
 
-    # Przygotuj dane do wykresów
-    total_sorted = total.copy()
+    # Przygotuj dane do wykresów (WAŻNE: reset_index() jest kluczowy dla plotly_events)
+    total_sorted = total.copy().reset_index(drop=True)
     colors = ["#2ca02c" if c == "Przychody" else "#d62728" for c in total_sorted['category']]
 
     # POZIOM 3: Dwa wykresy obok siebie
