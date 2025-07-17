@@ -269,7 +269,7 @@ def main():
     st.markdown("## 📈 Wykresy: kategorie i podkategorie")
     
     # Definicja dwóch kolumn: jedna na wykres, druga na przyciski
-    col1, col2 = st.columns([3, 2], gap="large")
+    col1, col2 = st.columns([3, 1], gap="medium")
 
     with col1:
         st.markdown("#### Podział kategorii")
