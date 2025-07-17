@@ -204,11 +204,14 @@ def main():
     # --- Tabela z dropdownami ---
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("",""))[1])
-    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','Effective_Amount','category','subcategory']]
+    final = df[['Date','Description','Tytuł','Effective_Amount','category','subcategory']].copy()
+    final = final.rename(columns={'Effective_Amount': 'Kwota'})
     st.markdown("## 🗃️ Tabela transakcji")
     edited = st.data_editor(
         final,
         column_config={
+            'Date': st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+            'Kwota': st.column_config.NumberColumn("Kwota", format="%.2f"),
             'category': st.column_config.SelectboxColumn("Kategoria", options=list(CATEGORIES.keys())),
             'subcategory': st.column_config.SelectboxColumn("Podkategoria", options=[s for subs in CATEGORIES.values() for s in subs])
         },
@@ -224,9 +227,9 @@ def main():
     # --- Raport i YTD obok siebie ---
     colA, colB = st.columns(2, gap="medium")
 
-    # RAPORT (na podstawie df_full, czyli pełnych danych)
+    # RAPORT (na podstawie df filtrowanego)
     with colA:
-        rt = df_full.copy()
+        rt = df.copy()  # Używamy df (filtrowanego) zamiast df_full
         order = ['Przychody'] + sorted([c for c in CATEGORIES if c!='Przychody'])
         total = pd.DataFrame({'category':order,'sum':0.0,'count':0}).set_index('category')
         if not rt.empty:
@@ -246,20 +249,22 @@ def main():
             with st.expander(lbl, expanded=False):
                 subs = grouped[grouped['category']==r['category']]
                 for __,s in subs.iterrows():
-                    st.markdown(f"• **{s['subcategory']}** ({int(s['count'])}) – {fmt(s['sum'])}", unsafe_allow_html=True)
+                    color = "green" if s['sum'] >= 0 else "red"
+                    st.markdown(f"• **{s['subcategory']}** ({int(s['count'])}) – <span style='color:{color}'>{fmt(s['sum'])}</span>", unsafe_allow_html=True)
 
-    # OSZCZĘDNOŚCI YTD (pełne dane)
+    # OSZCZĘDNOŚCI YTD (pełne dane - bez filtrowania)
     with colB:
         st.markdown(f"## 💰 Oszczędności YTD ({datetime.now().year})")
         ytd = df_full[(df_full['category']=='Oszczędności') & (df_full['Date'].dt.year==datetime.now().year)]
         total_ytd = ytd['Effective_Amount'].sum()
-        st.markdown(f"**Łącznie: {total_ytd:,.2f} zł**".replace(",", " "))
+        st.markdown(f"**Łącznie: {abs(total_ytd):,.2f} zł**".replace(",", " "))
         sub = ytd.groupby('subcategory')['Effective_Amount'].sum().reset_index().sort_values('Effective_Amount', ascending=False)
         for _,r in sub.iterrows():
             pct = (r['Effective_Amount']/total_ytd) if total_ytd else 0
-            lbl = f"{r['subcategory']} ({pct:.0%}) – {r['Effective_Amount']:,.2f} zł"
+            color = "green" if r['Effective_Amount'] >= 0 else "red"
+            lbl = f"{r['subcategory']} ({pct:.0%}) – <span style='color:{color}'>{abs(r['Effective_Amount']):,.2f} zł</span>"
             with st.expander(lbl, expanded=False):
-                st.write(f"- {r['subcategory']}: {r['Effective_Amount']:,.2f} zł ({pct:.0%})")
+                st.write(f"- {r['subcategory']}: {abs(r['Effective_Amount']):,.2f} zł ({pct:.0%})")
 
     # --- DRILL‑DOWN wykresy kołowe ---
     st.markdown("## 📈 Wykresy kołowe")
