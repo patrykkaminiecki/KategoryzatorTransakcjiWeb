@@ -99,7 +99,30 @@ def load_bank_csv(u):
     raise ValueError("Nie można wczytać CSV.")
 
 # ------------------------
-# 5) GŁÓWNA FUNKCJA
+# 5) OBLICZENIE KWOTY EFEKTYWNEJ
+# ------------------------
+def calculate_effective_amount(row):
+    """Zwraca Amount lub Kwota blokady - w zależności od tego, która nie jest 0"""
+    amount = row.get('Amount', 0)
+    blokada = row.get('Kwota blokady', 0)
+    
+    # Sprawdź które wartości nie są 0 lub NaN
+    amount_valid = pd.notna(amount) and amount != 0
+    blokada_valid = pd.notna(blokada) and blokada != 0
+    
+    if amount_valid and not blokada_valid:
+        return amount
+    elif blokada_valid and not amount_valid:
+        return blokada
+    elif amount_valid and blokada_valid:
+        # Jeśli obie są niepuste, preferuj Amount
+        return amount
+    else:
+        # Jeśli obie są 0 lub NaN, zwróć 0
+        return 0
+
+# ------------------------
+# 6) GŁÓWNA FUNKCJA
 # ------------------------
 def main():
     st.set_page_config(page_title="Kategoryzator", layout="wide")
@@ -134,6 +157,10 @@ def main():
     })
     df_full['Date'] = pd.to_datetime(df_full['Date'], errors='coerce')
     df_full = df_full[df_full['Date'].notna()]
+    
+    # Oblicz efektywną kwotę
+    df_full['Effective_Amount'] = df_full.apply(calculate_effective_amount, axis=1)
+    
     df_full['key'] = (df_full['Nr rachunku'].astype(str).fillna('') + '|' + df_full['Description']).map(clean_desc)
     df_full['category']    = df_full['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df_full['subcategory'] = df_full['key'].map(lambda k: cat.map.get(k,("",""))[1])
@@ -158,12 +185,12 @@ def main():
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
     # --- Bulk‑assign ---
-    st.markdown("#### Krok 1: Przypisz kategorie")
+    st.markdown("#### Krok 1: Przypisz kategorie")
     for idxs in df.groupby('key').groups.values():
         key = df.loc[idxs[0],'key']
         if key in cat.map and cat.map[key][0]:
             continue
-        amt = df.loc[idxs[0],'Amount']
+        amt = df.loc[idxs[0],'Effective_Amount']
         st.write(f"**{key}** – {amt:.2f} PLN")
         s = cat.suggest(key, amt)
         sc = st.selectbox("Kategoria", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
@@ -177,7 +204,7 @@ def main():
     # --- Tabela z dropdownami ---
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("",""))[1])
-    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','category','subcategory']]
+    final = df[['Date','Description','Tytuł','Amount','Kwota blokady','Effective_Amount','category','subcategory']]
     st.markdown("## 🗃️ Tabela transakcji")
     edited = st.data_editor(
         final,
@@ -200,18 +227,17 @@ def main():
     # RAPORT (na podstawie df_full, czyli pełnych danych)
     with colA:
         rt = df_full.copy()
-        # oblicz tylko dla filtrowanego roku lub wszystkich lat?
-        # tu robię dla całego zakresu, jak YTD
         order = ['Przychody'] + sorted([c for c in CATEGORIES if c!='Przychody'])
         total = pd.DataFrame({'category':order,'sum':0.0,'count':0}).set_index('category')
         if not rt.empty:
-            inc = rt[(rt['category']=='Przychody')&(rt['Amount']>0)].groupby('category')['Amount'].agg(['sum','count'])
-            exp = rt[(rt['category']!='Przychody')&(rt['Amount']<0)].groupby('category')['Amount'].agg(['sum','count'])
+            # Używamy Effective_Amount zamiast Amount
+            inc = rt[(rt['category']=='Przychody')&(rt['Effective_Amount']>0)].groupby('category')['Effective_Amount'].agg(['sum','count'])
+            exp = rt[(rt['category']!='Przychody')&(rt['Effective_Amount']<0)].groupby('category')['Effective_Amount'].agg(['sum','count'])
             total.update(pd.concat([inc,exp]))
         total = total.reset_index()
         total['count'] = total['count'].astype(int)
         total = total[total['count']>0]
-        grouped = rt.groupby(['category','subcategory'])['Amount'].agg(['sum','count']).reset_index()
+        grouped = rt.groupby(['category','subcategory'])['Effective_Amount'].agg(['sum','count']).reset_index()
 
         st.markdown("## 📊 Raport: ilość i suma wg kategorii")
         fmt = lambda v: f"{abs(v):,.2f}".replace(",", " ")
@@ -226,67 +252,74 @@ def main():
     with colB:
         st.markdown(f"## 💰 Oszczędności YTD ({datetime.now().year})")
         ytd = df_full[(df_full['category']=='Oszczędności') & (df_full['Date'].dt.year==datetime.now().year)]
-        total_ytd = ytd['Amount'].sum()
+        total_ytd = ytd['Effective_Amount'].sum()
         st.markdown(f"**Łącznie: {total_ytd:,.2f} zł**".replace(",", " "))
-        sub = ytd.groupby('subcategory')['Amount'].sum().reset_index().sort_values('Amount', ascending=False)
+        sub = ytd.groupby('subcategory')['Effective_Amount'].sum().reset_index().sort_values('Effective_Amount', ascending=False)
         for _,r in sub.iterrows():
-            pct = (r['Amount']/total_ytd) if total_ytd else 0
-            lbl = f"{r['subcategory']} ({pct:.0%}) – {r['Amount']:,.2f} zł"
+            pct = (r['Effective_Amount']/total_ytd) if total_ytd else 0
+            lbl = f"{r['subcategory']} ({pct:.0%}) – {r['Effective_Amount']:,.2f} zł"
             with st.expander(lbl, expanded=False):
-                st.write(f"- {r['subcategory']}: {r['Amount']:,.2f} zł ({pct:.0%})")
+                st.write(f"- {r['subcategory']}: {r['Effective_Amount']:,.2f} zł ({pct:.0%})")
 
     # --- DRILL‑DOWN wykresy kołowe ---
     st.markdown("## 📈 Wykresy kołowe")
-    # wybór kategorii jako przyciski w pionie
-    if 'selected_cat' not in st.session_state:
-        st.session_state['selected_cat'] = None
-    st.markdown("**Kliknij kategorię, by zobaczyć podkategorie:**")
-    for cat_name in total['category']:
-        if st.button(cat_name, key=f"btn_{cat_name}"):
-            st.session_state['selected_cat'] = cat_name
-    if st.button("Resetuj wybór"):
-        st.session_state['selected_cat'] = None
+    
+    # Utworzenie dwóch kolumn dla layoutu
+    col_buttons, col_chart = st.columns([1, 3])
+    
+    # Przyciski kategorii w lewej kolumnie
+    with col_buttons:
+        if 'selected_cat' not in st.session_state:
+            st.session_state['selected_cat'] = None
+        st.markdown("**Kliknij kategorię:**")
+        for cat_name in total['category']:
+            if st.button(cat_name, key=f"btn_{cat_name}"):
+                st.session_state['selected_cat'] = cat_name
+        if st.button("Resetuj wybór"):
+            st.session_state['selected_cat'] = None
 
-    sel = st.session_state['selected_cat']
+    # Wykresy w prawej kolumnie
+    with col_chart:
+        sel = st.session_state['selected_cat']
 
-    # wykres kategorii
-    tot = total.copy()
-    colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
-    fig_cat = go.Figure(data=[go.Pie(
-        labels=tot['category'], values=tot['sum'].abs(),
-        marker=dict(colors=colors, line=dict(color='#111', width=3)),
-        hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
-        textposition='outside',
-        texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
-        textfont=dict(size=14, color='white'),
-        pull=[0.02]*len(tot), hoverinfo='none'
-    )])
-    fig_cat.update_layout(height=450, showlegend=False,
-                          paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
-                          margin=dict(l=80,r=80,t=40,b=80))
-    st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
+        # wykres kategorii
+        tot = total.copy()
+        colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
+        fig_cat = go.Figure(data=[go.Pie(
+            labels=tot['category'], values=tot['sum'].abs(),
+            marker=dict(colors=colors, line=dict(color='#111', width=3)),
+            hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
+            textposition='outside',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+            textfont=dict(size=14, color='white'),
+            pull=[0.02]*len(tot), hoverinfo='none'
+        )])
+        fig_cat.update_layout(height=450, showlegend=False,
+                              paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+                              margin=dict(l=80,r=80,t=40,b=80))
+        st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
 
-    # wykres podkategorii
-    if sel:
-        sub = grouped[grouped['category']==sel].copy()
-        title = f"Podkategorie: {sel}"
-    else:
-        sub = grouped.copy()
-        title = "Podkategorie: wszystkie"
-    fig_sub = go.Figure(data=[go.Pie(
-        labels=sub['subcategory'], values=sub['sum'].abs(),
-        marker=dict(line=dict(color='#111', width=2)),
-        hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
-        textposition='outside',
-        texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
-        textfont=dict(size=14, color='white'),
-        pull=[0.02]*len(sub), hoverinfo='none'
-    )])
-    fig_sub.update_layout(title=title, height=450,
-                          showlegend=False,
-                          paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
-                          margin=dict(l=80,r=80,t=40,b=80))
-    st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False})
+        # wykres podkategorii
+        if sel:
+            sub = grouped[grouped['category']==sel].copy()
+            title = f"Podkategorie: {sel}"
+        else:
+            sub = grouped.copy()
+            title = "Podkategorie: wszystkie"
+        fig_sub = go.Figure(data=[go.Pie(
+            labels=sub['subcategory'], values=sub['sum'].abs(),
+            marker=dict(line=dict(color='#111', width=2)),
+            hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
+            textposition='outside',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+            textfont=dict(size=14, color='white'),
+            pull=[0.02]*len(sub), hoverinfo='none'
+        )])
+        fig_sub.update_layout(title=title, height=450,
+                              showlegend=False,
+                              paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+                              margin=dict(l=80,r=80,t=40,b=80))
+        st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False})
 
 
 if __name__=="__main__":
