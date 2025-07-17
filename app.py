@@ -314,7 +314,7 @@ def main():
         if selected_points:
             selected = total_sorted['category'][selected_points[0]['pointIndex']]
             st.session_state['selected_category'] = selected
-        elif st.session_state['selected_category']:
+        elif 'selected_category' in st.session_state and st.session_state['selected_category']:
             selected = st.session_state['selected_category']
         else:
             selected = None
