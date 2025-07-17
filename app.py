@@ -225,91 +225,75 @@ def main():
         # -------------------------
     # 6.x) WYKRES: z kolorami
     # -------------------------
-    st.markdown("## 📈 Wykres: suma według kategorii")
-    
-        # Uporządkowanie danych
+    import plotly.graph_objects as go
+    from plotly.colors import qualitative
+
+    st.markdown("## 📈 Wykres: suma według kategorii (kliknij słupek)")
+
     order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
-    grouped['sum'] = grouped['sum'].fillna(0)
-    total['sum'] = total['sum'].fillna(0)
-    total['mid'] = total['sum'] / 2
-    
-    # Wybór kategorii do drilldown
-    selected_category = st.selectbox("🔍 Wybierz kategorię, aby zobaczyć podkategorie", ["(brak)", *order])
-    
-    # GŁÓWNY WYKRES – KATEGORIE
-    bars = (
-        alt.Chart(total)
-        .mark_bar()
-        .encode(
-            x=alt.X('category:N', sort=order, title=None, axis=None),
-            y=alt.Y('sum:Q', title=None),
-            color=alt.condition(
-                alt.datum.category == 'Przychody',
-                alt.value("#2ca02c"),  # zielony
-                alt.value("#d62728")   # czerwony
-            ),
-            tooltip=[
-                alt.Tooltip('category:N', title='Kategoria'),
-                alt.Tooltip('sum:Q', title='Suma', format=",.2f")
-            ]
-        )
+    total_sorted = total.set_index('category').loc[order].reset_index()
+
+    # Kolory
+    colors = ["#2ca02c" if c == "Przychody" else "#d62728" for c in total_sorted['category']]
+
+    # Stan kliknięcia
+    if 'selected_category' not in st.session_state:
+        st.session_state['selected_category'] = None
+
+    # Wykres kategorii
+    fig_cat = go.Figure()
+    fig_cat.add_trace(go.Bar(
+        x=total_sorted['category'],
+        y=total_sorted['sum'],
+        marker_color=colors,
+        text=[f"{v:,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']],
+        textposition='inside',
+        insidetextanchor='middle',
+        hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN'<br>',
+    ))
+    fig_cat.update_layout(
+        height=400,
+        margin=dict(l=10, r=10, t=30, b=30),
+        xaxis_title=None, yaxis_title=None,
+        showlegend=False
     )
-    
-    labels = (
-        alt.Chart(total)
-        .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
-        .encode(
-            x=alt.X('category:N', sort=order),
-            y=alt.Y('mid:Q'),
-            text=alt.Text('sum:Q', format=",.2f")
-        )
-    )
-    
-    chart_main = (
-        alt.layer(bars, labels)
-        .properties(width='container', height=400)
-    )
-    
-    st.altair_chart(chart_main, use_container_width=True)
-    
-    # WYKRES SZCZEGÓŁOWY – PODKATEGORIE
-    if selected_category != "(brak)":
-        sub = grouped[grouped['category'] == selected_category].copy()
+
+    # Wyświetl wykres i obsłuż kliknięcie
+    selected = None
+    cat_click = st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False}, key="cat_chart")
+    clicked = st.session_state.get('plotly_click_cat_chart')
+    if clicked and 'points' in clicked and clicked['points']:
+        selected = clicked['points'][0]['x']
+        st.session_state['selected_category'] = selected
+    elif st.session_state['selected_category']:
+        selected = st.session_state['selected_category']
+
+    # Wykres podkategorii po kliknięciu
+    if selected:
+        sub = grouped[grouped['category'] == selected].copy()
         sub['subcategory'] = sub['subcategory'].fillna('brak')
-        sub['sum'] = sub['sum'].fillna(0)
         sub = sub.sort_values('sum', ascending=False)
-        sub['mid'] = sub['sum'].cumsum() - sub['sum'] / 2
-    
-        color_scheme = 'greens' if selected_category == 'Przychody' else 'reds'
-    
-        bars_sub = (
-            alt.Chart(sub)
-            .mark_bar()
-            .encode(
-                x=alt.X('subcategory:N', sort=sub['subcategory'].tolist(), title=None, axis=None),
-                y=alt.Y('sum:Q', title=None),
-                color=alt.Color('subcategory:N', scale=alt.Scale(scheme=color_scheme), legend=None),
-                tooltip=[
-                    alt.Tooltip('subcategory:N', title='Podkategoria'),
-                    alt.Tooltip('sum:Q', title='Suma', format=",.2f")
-                ]
-            )
+        color_scheme = qualitative.Greens if selected == 'Przychody' else qualitative.Reds
+        bar_colors = [color_scheme[i % len(color_scheme)] for i in range(len(sub))]
+        fig_sub = go.Figure()
+        fig_sub.add_trace(go.Bar(
+            x=sub['subcategory'],
+            y=sub['sum'],
+            marker_color=bar_colors,
+            text=[f"{v:,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']],
+            textposition='inside',
+            insidetextanchor='middle',
+            hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN'<br>',
+        ))
+        fig_sub.update_layout(
+            height=400,
+            margin=dict(l=10, r=10, t=30, b=30),
+            xaxis_title=None, yaxis_title=None,
+            showlegend=False,
+            title=f"🔍 Szczegóły: {selected}"
         )
+        st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
     
-        labels_sub = (
-            alt.Chart(sub)
-            .mark_text(align='center', baseline='middle', color='white', fontWeight='bold')
-            .encode(
-                x=alt.X('subcategory:N', sort=sub['subcategory'].tolist()),
-                y=alt.Y('mid:Q'),
-                text=alt.Text('sum:Q', format=",.2f")
-            )
-        )
-    
-        st.markdown(f"### 🔍 Szczegóły: {selected_category}")
-        st.altair_chart(
-            alt.layer(bars_sub, labels_sub).properties(width='container', height=400),
-            use_container_width=True
         )
 if __name__ == "__main__":
     main()
