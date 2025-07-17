@@ -268,14 +268,15 @@ def main():
             text=bar_text,
             textposition='inside',
             insidetextanchor='middle',
-            textfont=dict(color='white', size=18, family='Arial Black'),
-            hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
+            textfont=dict(color='white', size=16),
+            hoverinfo='skip',
+            hovertemplate=None,
             width=0.6,
             orientation='v',
         ))
         fig_cat.update_layout(
-            height=400,
-            margin=dict(l=10, r=10, t=30, b=30),
+            height=300,
+            margin=dict(l=10, r=10, t=20, b=20),
             xaxis_title=None,
             yaxis_title=None,
             showlegend=False,
@@ -285,18 +286,16 @@ def main():
                 ticktext=total_sorted['category'],
                 tickangle=0,
                 color='white',
-                tickfont=dict(size=18, color='white', family='Arial Black'),
+                tickfont=dict(size=15, color='white'),
                 showgrid=False,
                 zeroline=False,
                 showline=False
             ),
             yaxis=dict(
-                color='white',
-                tickfont=dict(size=16, color='white', family='Arial Black'),
+                showticklabels=False,
                 showgrid=False,
                 zeroline=False,
-                showline=False,
-                tickformat=",.2f PLN"
+                showline=False
             ),
             plot_bgcolor='#111',
             paper_bgcolor='#111',
@@ -337,12 +336,13 @@ def main():
                 text=bar_text_sub,
                 textposition='inside',
                 insidetextanchor='middle',
-                textfont=dict(color='white', size=18, family='Arial Black'),
-                hovertemplate='<b>%{x}</b><br>Suma: %{y:,.2f} PLN<br>',
+                textfont=dict(color='white', size=16),
+                hoverinfo='skip',
+                hovertemplate=None,
             ))
             fig_sub.update_layout(
-                height=400,
-                margin=dict(l=10, r=10, t=30, b=30),
+                height=300,
+                margin=dict(l=10, r=10, t=20, b=20),
                 xaxis_title=None,
                 yaxis_title=None,
                 showlegend=False,
@@ -353,18 +353,16 @@ def main():
                     ticktext=sub['subcategory'],
                     tickangle=0,
                     color='white',
-                    tickfont=dict(size=18, color='white', family='Arial Black'),
+                    tickfont=dict(size=15, color='white'),
                     showgrid=False,
                     zeroline=False,
                     showline=False
                 ),
                 yaxis=dict(
-                    color='white',
-                    tickfont=dict(size=16, color='white', family='Arial Black'),
+                    showticklabels=False,
                     showgrid=False,
                     zeroline=False,
-                    showline=False,
-                    tickformat=",.2f PLN"
+                    showline=False
                 ),
                 plot_bgcolor='#111',
                 paper_bgcolor='#111',
