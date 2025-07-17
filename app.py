@@ -220,6 +220,11 @@ def main():
     # Agregacja podkategorii
     grouped = edited_df.groupby(['category', 'subcategory'])['Amount'].agg(['sum', 'count']).reset_index()
 
+    # Sprawdź, czy są dane do wyświetlenia
+    if total.empty or total['count'].sum() == 0:
+        st.info("Brak danych do wyświetlenia w wybranym okresie.")
+        return # Zakończ, jeśli nie ma co pokazywać
+
     # POZIOM 2: Raport tekstowy
     st.markdown("## 📊 Raport: ilość i suma wg kategorii")
 
@@ -250,8 +255,7 @@ def main():
     from plotly.colors import qualitative
 
     # Przygotuj dane do wykresów
-    order = ['Przychody'] + sorted([c for c in total['category'].unique() if c != 'Przychody'])
-    total_sorted = total.set_index('category').loc[order].reset_index()
+    total_sorted = total.copy()
     colors = ["#2ca02c" if c == "Przychody" else "#d62728" for c in total_sorted['category']]
 
     # POZIOM 3: Dwa wykresy obok siebie
