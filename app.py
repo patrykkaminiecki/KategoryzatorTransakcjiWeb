@@ -272,20 +272,23 @@ def main():
     col1, col2 = st.columns([3, 2], gap="large")
 
     with col1:
-        st.markdown("#### Suma według kategorii")
-        bar_text = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in total_sorted['sum']]
-        fig_cat = go.Figure()
-        fig_cat.add_trace(go.Bar(
-            x=total_sorted['category'], y=total_sorted['sum'], marker_color=colors,
-            text=bar_text, textposition='inside', insidetextanchor='middle', textangle=0,
+        st.markdown("#### Podział kategorii")
+        fig_cat = go.Figure(data=[go.Pie(
+            labels=total_sorted['category'],
+            values=total_sorted['sum'].abs(),
+            marker_colors=colors,
+            textinfo='label+percent',
+            insidetextorientation='radial',
+            hoverinfo='label+value',
             textfont=dict(color='white', size=13, family='Arial'),
-            hoverinfo='skip', hovertemplate=None, width=0.7, orientation='v',
-        ))
+            hole=.3
+        )])
         fig_cat.update_layout(
-            height=400, margin=dict(l=10, r=10, t=20, b=20), xaxis_title=None, yaxis_title=None, showlegend=False,
-            xaxis=dict(tickmode='array', tickvals=total_sorted['category'], ticktext=total_sorted['category'], tickangle=0, color='white', tickfont=dict(size=13, color='white', family='Arial'), showgrid=False, zeroline=False, showline=False),
-            yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False),
-            plot_bgcolor='#111', paper_bgcolor='#111', bargap=0.15
+            height=400, margin=dict(l=20, r=20, t=20, b=20),
+            showlegend=False,
+            paper_bgcolor='#111',
+            plot_bgcolor='#111',
+            font_color='white'
         )
         st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar": False})
 
@@ -309,24 +312,23 @@ def main():
         if not sub.empty:
             sub['subcategory'] = sub['subcategory'].fillna('brak')
             sub = sub.sort_values('sum', ascending=False)
-            green_shades = ['#b7e4c7', '#74c69d', '#40916c', '#2d6a4f', '#1b4332']
-            red_shades = ['#f8d7da', '#f5c2c7', '#e57373', '#d62728', '#7f1d1d']
-            color_scheme = green_shades if selected == 'Przychody' else red_shades
-            bar_colors = [color_scheme[i % len(color_scheme)] for i in range(len(sub))]
-            bar_text_sub = [f"{abs(v):,.2f}".replace(",", " ").replace(".", ",") for v in sub['sum']]
-            
-            fig_sub = go.Figure()
-            fig_sub.add_trace(go.Bar(
-                x=sub['subcategory'], y=sub['sum'], marker_color=bar_colors, text=bar_text_sub,
-                textposition='inside', insidetextanchor='middle', textangle=0,
+
+            fig_sub = go.Figure(data=[go.Pie(
+                labels=sub['subcategory'],
+                values=sub['sum'].abs(),
+                textinfo='label+percent',
+                insidetextorientation='radial',
+                hoverinfo='label+value',
                 textfont=dict(color='white', size=13, family='Arial'),
-                hoverinfo='skip', hovertemplate=None,
-            ))
+                hole=.3
+            )])
             fig_sub.update_layout(
-                height=300, margin=dict(l=10, r=10, t=20, b=20), xaxis_title=None, yaxis_title=None, showlegend=False,
-                xaxis=dict(tickmode='array', tickvals=sub['subcategory'], ticktext=sub['subcategory'], tickangle=0, color='white', tickfont=dict(size=13, color='white', family='Arial'), showgrid=False, zeroline=False, showline=False),
-                yaxis=dict(showticklabels=False, showgrid=False, zeroline=False, showline=False),
-                plot_bgcolor='#111', paper_bgcolor='#111', bargap=0.15
+                title=f"Podkategorie dla: {selected}",
+                height=400, margin=dict(l=20, r=20, t=40, b=20),
+                showlegend=False,
+                paper_bgcolor='#111',
+                plot_bgcolor='#111',
+                font_color='white'
             )
             st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar": False}, key="sub_chart")
         else:
