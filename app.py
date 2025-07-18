@@ -571,6 +571,64 @@ def main():
     
     else:
         st.info("Brak wystarczających danych historycznych do utworzenia prognozy.")
+    # --- DRILL‑DOWN wykresy kołowe ---
+    st.markdown("## 📈 Wykresy kołowe")
+    
+    # Utworzenie dwóch kolumn dla layoutu
+    col_buttons, col_chart = st.columns([1, 3])
+    
+    # Przyciski kategorii w lewej kolumnie
+    with col_buttons:
+        if 'selected_cat' not in st.session_state:
+            st.session_state['selected_cat'] = None
+        st.markdown("**Kliknij kategorię:**")
+        for cat_name in total['category']:
+            if st.button(cat_name, key=f"btn_{cat_name}"):
+                st.session_state['selected_cat'] = cat_name
+        if st.button("Resetuj wybór"):
+            st.session_state['selected_cat'] = None
 
+    # Wykresy w prawej kolumnie
+    with col_chart:
+        sel = st.session_state['selected_cat']
+
+        # wykres kategorii
+        tot = total.copy()
+        colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
+        fig_cat = go.Figure(data=[go.Pie(
+            labels=tot['category'], values=tot['sum'].abs(),
+            marker=dict(colors=colors, line=dict(color='#111', width=3)),
+            hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
+            textposition='outside',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+            textfont=dict(size=14, color='white'),
+            pull=[0.02]*len(tot), hoverinfo='none'
+        )])
+        fig_cat.update_layout(height=450, showlegend=False,
+                              paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+                              margin=dict(l=80,r=80,t=40,b=80))
+        st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
+
+        # wykres podkategorii
+        if sel:
+            sub = grouped[grouped['category']==sel].copy()
+            title = f"Podkategorie: {sel}"
+        else:
+            sub = grouped.copy()
+            title = "Podkategorie: wszystkie"
+        fig_sub = go.Figure(data=[go.Pie(
+            labels=sub['subcategory'], values=sub['sum'].abs(),
+            marker=dict(line=dict(color='#111', width=2)),
+            hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
+            textposition='outside',
+            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+            textfont=dict(size=14, color='white'),
+            pull=[0.02]*len(sub), hoverinfo='none'
+        )])
+        fig_sub.update_layout(title=title, height=450,
+                              showlegend=False,
+                              paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+                              margin=dict(l=80,r=80,t=40,b=80))
+        st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False})
 if __name__ == "__main__":
     main()
