@@ -337,7 +337,7 @@ def main():
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
     # --- Bulk‑assign ---
-    st.markdown("#### Krok 1: Przypisz kategorie")
+    st.markdown("#### Krok 1: Przypisz Kategorie")
     for idxs in df.groupby('key').groups.values():
         key = df.loc[idxs[0],'key']
         if key in cat.map and cat.map[key][0]:
@@ -358,7 +358,7 @@ def main():
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("",""))[1])
     final = df[['Date','Description','Tytuł','Effective_Amount','category','subcategory']].copy()
     final = final.rename(columns={'Effective_Amount': 'Kwota'})
-    st.markdown("## 🗃️ Tabela transakcji")
+    st.markdown("## 🗃️ Tabela Transakcji")
     edited = st.data_editor(
         final,
         column_config={
