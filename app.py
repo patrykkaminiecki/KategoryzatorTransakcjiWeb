@@ -9,7 +9,9 @@ import numpy as np
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import calendar
-
+import requests
+import base64
+import json
 # ------------------------
 # 1) DEFINICJA KATEGORII
 # ------------------------
@@ -35,6 +37,10 @@ CATEGORIES = {
     'Wakacje': ['Wakacje'],
     'Gotówka': ['Wpłata', 'Wypłata']
 }
+
+GITHUB_REPO = "patrykkaminiecki/kategoryzatortransakcjiweb"  # Zmień na swoje dane
+GITHUB_FILE_PATH = "assignments.csv"
+GITHUB_TOKEN = st.secrets.get("GITHUB_TOKEN")  # Token z Streamlit secrets
 
 # Modele dystrybucji oszczędności
 SAVINGS_MODELS = {
@@ -82,6 +88,70 @@ def get_pair_embs():
 EMBED_MODEL = get_embed_model()
 PAIR_EMBS = get_pair_embs()
 
+def download_assignments_from_github():
+    """Pobiera plik assignments.csv z GitHub"""
+    if not GITHUB_TOKEN:
+        return pd.DataFrame()
+    
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            content = response.json()
+            file_content = base64.b64decode(content['content']).decode('utf-8')
+            return pd.read_csv(io.StringIO(file_content))
+        else:
+            return pd.DataFrame()
+    except Exception as e:
+        st.warning(f"Nie udało się pobrać assignments.csv z GitHub: {e}")
+        return pd.DataFrame()
+
+def upload_assignments_to_github(df):
+    """Wysyła plik assignments.csv na GitHub"""
+    if not GITHUB_TOKEN:
+        st.error("Brak tokena GitHub")
+        return False
+    
+    # Konwertuj DataFrame do CSV
+    csv_content = df.to_csv(index=False)
+    encoded_content = base64.b64encode(csv_content.encode('utf-8')).decode('utf-8')
+    
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE_PATH}"
+    headers = {"Authorization": f"token {GITHUB_TOKEN}"}
+    
+    # Sprawdź czy plik już istnieje (potrzebujemy SHA)
+    try:
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            sha = response.json()['sha']
+        else:
+            sha = None
+    except:
+        sha = None
+    
+    # Przygotuj dane do wysłania
+    data = {
+        "message": f"Update assignments.csv - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "content": encoded_content,
+        "branch": "main"  # lub "master" jeśli używasz master
+    }
+    
+    if sha:
+        data["sha"] = sha
+    
+    try:
+        response = requests.put(url, headers=headers, json=data)
+        if response.status_code in [200, 201]:
+            return True
+        else:
+            st.error(f"Błąd GitHub API: {response.status_code}")
+            return False
+    except Exception as e:
+        st.error(f"Nie udało się wysłać pliku na GitHub: {e}")
+        return False
+
 # ------------------------
 # 3) CATEGORIZER
 # ------------------------
@@ -91,10 +161,20 @@ def clean_desc(s):
 class Categorizer:
     def __init__(self):
         self.map = {}
-        if ASSIGNMENTS_FILE.exists():
+        
+        # Najpierw spróbuj pobrać z GitHub
+        github_df = download_assignments_from_github()
+        if not github_df.empty:
+            github_df = github_df.drop_duplicates('description', keep='last')
+            for _, r in github_df.iterrows():
+                self.map[clean_desc(r['description'])] = (r['category'], r['subcategory'])
+        
+        # Jeśli nie ma w GitHub, sprawdź lokalnie
+        elif ASSIGNMENTS_FILE.exists():
             df = pd.read_csv(ASSIGNMENTS_FILE).drop_duplicates('description', keep='last')
             for _, r in df.iterrows():
                 self.map[clean_desc(r['description'])] = (r['category'], r['subcategory'])
+    
     def suggest(self, key, amt):
         kc = clean_desc(key)
         if kc in self.map and self.map[kc][0]:
@@ -105,14 +185,23 @@ class Categorizer:
         if score > 0.5:
             return tuple(CATEGORY_PAIRS[idx].split(" — "))
         return ('Przychody','Inne') if amt>=0 else ('Inne',CATEGORIES['Inne'][0])
+    
     def assign(self, key, cat, sub):
         kc = clean_desc(key)
         if not kc: return
         self.map[kc] = (cat, sub)
+        
+        # Zapisz lokalnie
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        pd.DataFrame([{"description":k,"category":c,"subcategory":s}
-                      for k,(c,s) in self.map.items()]) \
-          .to_csv(ASSIGNMENTS_FILE, index=False)
+        df = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
+                          for k,(c,s) in self.map.items()])
+        df.to_csv(ASSIGNMENTS_FILE, index=False)
+        
+        # Wyślij na GitHub
+        if upload_assignments_to_github(df):
+            st.success("✅ Zapisano assignments.csv lokalnie i na GitHub")
+        else:
+            st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
 
 # ------------------------
 # 4) WCZYTANIE CSV
@@ -448,10 +537,17 @@ def main():
         use_container_width=True
     )
     if st.button("💾 Zapisz zmiany"):
-        keys = df['key'].tolist()
-        for i,row in enumerate(edited.itertuples(index=False)):
-            cat.assign(keys[i], row.category, row.subcategory)
-        st.success("Zapisano assignments.csv")
+    keys = df['key'].tolist()
+    for i,row in enumerate(edited.itertuples(index=False)):
+        cat.assign(keys[i], row.category, row.subcategory)
+    
+    # Dodatkowe wysłanie na GitHub po zapisaniu wszystkich zmian
+    df_to_upload = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
+                                for k,(c,s) in cat.map.items()])
+    if upload_assignments_to_github(df_to_upload):
+        st.success("✅ Zapisano wszystkie zmiany lokalnie i na GitHub")
+    else:
+        st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
 
     # --- Raport i YTD obok siebie ---
     colA, colB = st.columns(2, gap="medium")
