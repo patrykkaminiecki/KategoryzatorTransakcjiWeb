@@ -157,25 +157,7 @@ def upload_assignments_to_github(df):
 # 3) CATEGORIZER
 # ------------------------
 def clean_desc(s):
-    s = str(s).replace("'", "").replace('"', "").strip()
-    
-    # Usuń typowe zmienne elementy z opisów transakcji
-    patterns_to_remove = [
-        r'\d{2}[.\-/]\d{2}[.\-/]\d{4}',  # daty
-        r'\d{2}:\d{2}',                   # godziny  
-        r'KARTA\s+\d+',                   # numery kart
-        r'\d{8,}',                        # długie numery
-        r'TERMINAL\s+\d+',                # numery terminali
-        r'TRANSAKCJA\s+\d+',              # numery transakcji
-        r'REF\s+\d+',                     # numery referencyjne
-    ]
-    
-    for pattern in patterns_to_remove:
-        s = re.sub(pattern, '', s, flags=re.IGNORECASE)
-    
-    # Usuń nadmierne spacje
-    s = re.sub(r'\s+', ' ', s).strip()
-    return s
+    return re.sub(r'\s+', ' ', str(s).replace("'", "").replace('"', "")).strip()
 
 class Categorizer:
     def __init__(self):
@@ -424,20 +406,7 @@ def main():
     # Oblicz efektywną kwotę
     df_full['Effective_Amount'] = df_full.apply(calculate_effective_amount, axis=1)
     
-    def create_smart_key(row):
-        desc = str(row['Description']).upper()
-        
-        # Lista głównych kontrahentów
-        merchants = ['LIDL', 'BIEDRONKA', 'KAUFLAND', 'CARREFOUR', 'SHELL', 'ORLEN', 'ALLEGRO', 'NETFLIX', 'SPOTIFY']
-        
-        for merchant in merchants:
-            if merchant in desc:
-                return f"{row['Nr rachunku']}|{merchant}"
-        
-        # Jeśli nie znajdzie, użyj oczyszczonego opisu
-        return f"{row['Nr rachunku']}|{clean_desc(row['Description'])}"
-
-    df_full['key'] = df_full.apply(create_smart_key, axis=1)
+    df_full['key'] = (df_full['Nr rachunku'].astype(str).fillna('') + '|' + df_full['Description']).map(clean_desc)
     df_full['category']    = df_full['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df_full['subcategory'] = df_full['key'].map(lambda k: cat.map.get(k,("",""))[1])
 
