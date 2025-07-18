@@ -337,21 +337,30 @@ def main():
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
     # --- Bulk‑assign ---
-    st.markdown("#### Krok 1: Przypisz Kategorie")
+    # Sprawdź czy są nieprzypisane kategorie
+    unassigned_keys = []
     for idxs in df.groupby('key').groups.values():
         key = df.loc[idxs[0],'key']
-        if key in cat.map and cat.map[key][0]:
-            continue
-        amt = df.loc[idxs[0],'Effective_Amount']
-        st.write(f"**{key}** – {amt:.2f} PLN")
-        s = cat.suggest(key, amt)
-        sc = st.selectbox("Kategoria", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
-        ss = st.selectbox("Podkategoria", CATEGORIES[sc],
-                          index=CATEGORIES[sc].index(s[1]) if s[1] in CATEGORIES[sc] else 0,
-                          key=f"sub_{key}")
-        cat.assign(key, sc, ss)
-
-    st.markdown("---"); st.success("Zapis assignments.csv")
+        if key not in cat.map or not cat.map[key][0]:
+            unassigned_keys.append((key, idxs[0]))
+    
+    # Pokaż sekcję tylko jeśli są nieprzypisane kategorie
+    if unassigned_keys:
+        st.markdown("#### Krok 1: Przypisz Kategorie")
+        for key, idx in unassigned_keys:
+            amt = df.loc[idx,'Effective_Amount']
+            st.write(f"**{key}** – {amt:.2f} PLN")
+            s = cat.suggest(key, amt)
+            sc = st.selectbox("Kategoria", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
+            ss = st.selectbox("Podkategoria", CATEGORIES[sc],
+                              index=CATEGORIES[sc].index(s[1]) if s[1] in CATEGORIES[sc] else 0,
+                              key=f"sub_{key}")
+            cat.assign(key, sc, ss)
+        
+        st.markdown("---")
+        st.success("Zapis Assignments.csv")
+    else:
+        st.success("✅ Wszystkie transakcje mają już przypisane kategorie!")
 
     # --- Tabela z dropdownami ---
     df['category']    = df['key'].map(lambda k: cat.map.get(k,("",""))[0])
