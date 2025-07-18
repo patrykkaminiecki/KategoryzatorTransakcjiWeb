@@ -336,7 +336,7 @@ def main():
         m = {v:k for k,v in meses.items()}[mname]
         df = df[(df['Date'].dt.year==y)&(df['Date'].dt.month==m)]
 
-    # --- Bulk‑assign ---
+        # --- Bulk‑assign ---
     # Sprawdź czy są nieprzypisane kategorie
     unassigned_keys = []
     for idxs in df.groupby('key').groups.values():
@@ -346,19 +346,87 @@ def main():
     
     # Pokaż sekcję tylko jeśli są nieprzypisane kategorie
     if unassigned_keys:
-        st.markdown("#### Krok 1: Przypisz Kategorie")
-        for key, idx in unassigned_keys:
-            amt = df.loc[idx,'Effective_Amount']
-            st.write(f"**{key}** – {amt:.2f} PLN")
-            s = cat.suggest(key, amt)
-            sc = st.selectbox("Kategoria", list(CATEGORIES.keys()), index=list(CATEGORIES.keys()).index(s[0]), key=f"cat_{key}")
-            ss = st.selectbox("Podkategoria", CATEGORIES[sc],
-                              index=CATEGORIES[sc].index(s[1]) if s[1] in CATEGORIES[sc] else 0,
-                              key=f"sub_{key}")
-            cat.assign(key, sc, ss)
+        st.markdown("#### Krok 1: Przypisz kategorie")
         
-        st.markdown("---")
-        st.success("Zapis Assignments.csv")
+        # Inicjalizacja session state dla indeksu bieżącej transakcji
+        if 'current_assignment_index' not in st.session_state:
+            st.session_state.current_assignment_index = 0
+        
+        # Sprawdź czy wszystkie transakcje zostały przetworzone
+        if st.session_state.current_assignment_index >= len(unassigned_keys):
+            st.success("✅ Wszystkie nowe transakcje zostały skategoryzowane!")
+            st.session_state.current_assignment_index = 0  # Reset dla następnego razu
+        else:
+            # Pokaż progress bar
+            progress = st.session_state.current_assignment_index / len(unassigned_keys)
+            st.progress(progress, text=f"Postęp: {st.session_state.current_assignment_index + 1}/{len(unassigned_keys)}")
+            
+            # Pobierz bieżącą transakcję
+            current_key, current_idx = unassigned_keys[st.session_state.current_assignment_index]
+            current_amt = df.loc[current_idx,'Effective_Amount']
+            
+            # Pokaż dialog dla bieżącej transakcji
+            with st.container():
+                st.markdown("---")
+                st.write(f"**Transakcja {st.session_state.current_assignment_index + 1}/{len(unassigned_keys)}:**")
+                st.write(f"**Opis:** {current_key}")
+                st.write(f"**Kwota:** {current_amt:.2f} PLN")
+                
+                # Pobierz sugestię dla bieżącej transakcji
+                suggestion = cat.suggest(current_key, current_amt)
+                
+                # Selectboxy dla kategorii
+                col1, col2 = st.columns(2)
+                with col1:
+                    selected_cat = st.selectbox(
+                        "Kategoria", 
+                        list(CATEGORIES.keys()), 
+                        index=list(CATEGORIES.keys()).index(suggestion[0]), 
+                        key=f"cat_popup_{st.session_state.current_assignment_index}"
+                    )
+                with col2:
+                    selected_sub = st.selectbox(
+                        "Podkategoria", 
+                        CATEGORIES[selected_cat],
+                        index=CATEGORIES[selected_cat].index(suggestion[1]) if suggestion[1] in CATEGORIES[selected_cat] else 0,
+                        key=f"sub_popup_{st.session_state.current_assignment_index}"
+                    )
+                
+                # Przyciski akcji
+                col_skip, col_save, col_save_all = st.columns([1, 1, 1])
+                
+                with col_skip:
+                    if st.button("⏭️ Pomiń", key=f"skip_{st.session_state.current_assignment_index}"):
+                        st.session_state.current_assignment_index += 1
+                        st.rerun()
+                
+                with col_save:
+                    if st.button("💾 Zapisz i następna", key=f"save_next_{st.session_state.current_assignment_index}"):
+                        # Zapisz kategorię dla bieżącej transakcji
+                        cat.assign(current_key, selected_cat, selected_sub)
+                        st.session_state.current_assignment_index += 1
+                        st.success(f"Zapisano: {current_key} → {selected_cat} — {selected_sub}")
+                        st.rerun()
+                
+                with col_save_all:
+                    if st.button("💾 Zapisz pozostałe z sugestiami", key=f"save_all_{st.session_state.current_assignment_index}"):
+                        # Zapisz bieżącą transakcję
+                        cat.assign(current_key, selected_cat, selected_sub)
+                        saved_count = 1
+                        
+                        # Zapisz wszystkie pozostałe z sugestiami
+                        for i in range(st.session_state.current_assignment_index + 1, len(unassigned_keys)):
+                            key, idx = unassigned_keys[i]
+                            amt = df.loc[idx,'Effective_Amount']
+                            auto_suggestion = cat.suggest(key, amt)
+                            cat.assign(key, auto_suggestion[0], auto_suggestion[1])
+                            saved_count += 1
+                        
+                        st.session_state.current_assignment_index = len(unassigned_keys)
+                        st.success(f"Zapisano {saved_count} transakcji z automatycznymi sugestiami!")
+                        st.rerun()
+                
+                st.markdown("---")
     else:
         st.success("✅ Wszystkie transakcje mają już przypisane kategorie!")
 
