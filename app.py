@@ -286,12 +286,12 @@ def main():
       .stMarkdown h1,h2,h3{color:#7fd8be;font-weight:bold;}
     </style>""", unsafe_allow_html=True)
 
-    st.title("🗂 Kategoryzator transakcji + Raporty")
+    st.title("🏠 HomeFlow")
     cat = Categorizer()
 
     # --- Wczytanie pliku ---
-    st.sidebar.header("Filtr dat")
-    up = st.sidebar.file_uploader("CSV banku", type="csv")
+    st.sidebar.header("Zakres analizy")
+    up = st.sidebar.file_uploader("Import danych", type="csv")
     if not up:
         st.sidebar.info("Wczytaj plik CSV."); return
     try:
@@ -394,7 +394,7 @@ def main():
         total = total[total['count']>0]
         grouped = rt.groupby(['category','subcategory'])['Effective_Amount'].agg(['sum','count']).reset_index()
 
-        st.markdown("## 📊 Raport: ilość i suma wg kategorii")
+        st.markdown("## 📊 Podsumowanie")
         fmt = lambda v: f"{abs(v):,.2f}".replace(",", " ")
         for _,r in total.iterrows():
             # Oblicz rzeczywistą sumę dla kategorii z podkategorii
@@ -408,7 +408,7 @@ def main():
 
     # OSZCZĘDNOŚCI YTD (pełne dane - bez filtrowania) - POSORTOWANE A-Z
     with colB:
-        st.markdown(f"## 💰 Oszczędności YTD ({datetime.now().year})")
+        st.markdown(f"## 💰 Twoje Oszczędności ({datetime.now().year})")
         ytd = df_full[(df_full['category']=='Oszczędności') & (df_full['Date'].dt.year==datetime.now().year)]
         total_ytd = ytd['Effective_Amount'].sum()
         st.markdown(f"**Łącznie: {abs(total_ytd):,.2f} zł**".replace(",", " "))
@@ -572,7 +572,7 @@ def main():
         else:
             st.info("Brak wystarczających danych historycznych do utworzenia prognozy.")
     # --- DRILL‑DOWN wykresy kołowe ---
-    with st.expander("📈 Wykresy kołowe", expanded=False):
+    with st.expander("📈 Twoje Finanse", expanded=False):
     
         # Utworzenie dwóch kolumn dla layoutu
         col_buttons, col_chart = st.columns([1, 3])
@@ -581,7 +581,7 @@ def main():
         with col_buttons:
             if 'selected_cat' not in st.session_state:
                 st.session_state['selected_cat'] = None
-            st.markdown("**Kliknij kategorię:**")
+            st.markdown("**Wybierz kategorię:**")
             for cat_name in total['category']:
                 if st.button(cat_name, key=f"btn_{cat_name}"):
                     st.session_state['selected_cat'] = cat_name
