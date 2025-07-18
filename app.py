@@ -424,7 +424,20 @@ def main():
     # Oblicz efektywną kwotę
     df_full['Effective_Amount'] = df_full.apply(calculate_effective_amount, axis=1)
     
-    df_full['key'] = (df_full['Nr rachunku'].astype(str).fillna('') + '|' + df_full['Description']).map(clean_desc)
+    def create_smart_key(row):
+        desc = str(row['Description']).upper()
+        
+        # Lista głównych kontrahentów
+        merchants = ['LIDL', 'BIEDRONKA', 'KAUFLAND', 'CARREFOUR', 'SHELL', 'ORLEN', 'ALLEGRO', 'NETFLIX', 'SPOTIFY']
+        
+        for merchant in merchants:
+            if merchant in desc:
+                return f"{row['Nr rachunku']}|{merchant}"
+        
+        # Jeśli nie znajdzie, użyj oczyszczonego opisu
+        return f"{row['Nr rachunku']}|{clean_desc(row['Description'])}"
+
+    df_full['key'] = df_full.apply(create_smart_key, axis=1)
     df_full['category']    = df_full['key'].map(lambda k: cat.map.get(k,("",""))[0])
     df_full['subcategory'] = df_full['key'].map(lambda k: cat.map.get(k,("",""))[1])
 
