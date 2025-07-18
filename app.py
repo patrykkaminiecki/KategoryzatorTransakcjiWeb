@@ -161,6 +161,14 @@ def clean_desc(s):
     return re.sub(r'\s+', ' ', str(s).replace("'", "").replace('"', "")).strip()
 
 class Categorizer:
+    def save_all_assignments(self):
+    """Zapisuje wszystkie przypisania jednym ruchem bez pokazywania komunikatów"""
+    ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
+    df = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
+                      for k,(c,s) in self.map.items()])
+    df.to_csv(ASSIGNMENTS_FILE, index=False)
+    return upload_assignments_to_github(df)
+    
     def __init__(self):
         self.map = {}
         
@@ -570,7 +578,7 @@ def main():
                 changed_count += 1
         
         if changes_made:
-            # Zapisz wszystkie przypisania jednym ruchem
+            # Zapisz wszystkie przypisania jednym ruchem - BEZ komunikatów
             success = cat.save_all_assignments()
             if success:
                 st.success(f"✅ Zapisano {changed_count} zmian lokalnie i na GitHub")
