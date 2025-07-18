@@ -162,14 +162,6 @@ def clean_desc(s):
 
 class Categorizer:
     
-    def save_all_assignments(self):
-            """Zapisuje wszystkie przypisania jednym ruchem bez pokazywania komunikatów"""
-            ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-            df = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
-                              for k,(c,s) in self.map.items()])
-            df.to_csv(ASSIGNMENTS_FILE, index=False)
-            return upload_assignments_to_github(df)
-    
     def __init__(self):
         self.map = {}
         
@@ -185,6 +177,14 @@ class Categorizer:
             df = pd.read_csv(ASSIGNMENTS_FILE).drop_duplicates('description', keep='last')
             for _, r in df.iterrows():
                 self.map[clean_desc(r['description'])] = (r['category'], r['subcategory'])
+    
+    def save_all_assignments(self):
+        """Zapisuje wszystkie przypisania jednym ruchem bez pokazywania komunikatów"""
+        ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
+        df = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
+                          for k,(c,s) in self.map.items()])
+        df.to_csv(ASSIGNMENTS_FILE, index=False)
+        return upload_assignments_to_github(df)
     
     def suggest(self, key, amt):
         kc = clean_desc(key)
@@ -213,7 +213,6 @@ class Categorizer:
             st.success("✅ Zapisano assignments.csv lokalnie i na GitHub")
         else:
             st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
-
 # ------------------------
 # 4) WCZYTANIE CSV
 # ------------------------
