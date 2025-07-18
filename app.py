@@ -541,14 +541,25 @@ def main():
         use_container_width=True
     )
     if st.button("💾 Zapisz zmiany"):
+        # 1) Przygotuj listę nowych rekordów
         keys = df['key'].tolist()
-        for i,row in enumerate(edited.itertuples(index=False)):
-            cat.assign(keys[i], row.category, row.subcategory)
-        
-        # Dodatkowe wysłanie na GitHub po zapisaniu wszystkich zmian
-        df_to_upload = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
-                                    for k,(c,s) in cat.map.items()])
-        if upload_assignments_to_github(df_to_upload):
+        new_records = []
+        for i, row in enumerate(edited.itertuples(index=False)):
+            desc = keys[i]
+            cat.map[desc] = (row.category, row.subcategory)  # aktualizuj w pamięci
+            new_records.append({
+                "description": desc,
+                "category": row.category,
+                "subcategory": row.subcategory
+            })
+
+        # 2) Zapisz lokalnie cały plik jednym ruchem
+        df_new = pd.DataFrame(new_records)
+        ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
+        df_new.to_csv(ASSIGNMENTS_FILE, index=False)
+
+        # 3) Wyślij na GitHub tylko raz
+        if upload_assignments_to_github(df_new):
             st.success("✅ Zapisano wszystkie zmiany lokalnie i na GitHub")
         else:
             st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
