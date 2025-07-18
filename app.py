@@ -418,217 +418,217 @@ def main():
             st.markdown(f"• **{r['subcategory']}** ({pct:.0%}) – {abs(r['Effective_Amount']):,.2f} zł".replace(",", " "))
 
     # --- SEKCJA SYMULACJI ---
-    st.markdown("## 🔮 Symulacja przyszłego miesiąca")
+    with st.expander("🔮 Symulacja przyszłego miesiąca", expanded=False):
     
-    # Wybór miesiąca do prognozy
-    col_month, col_year = st.columns(2)
-    with col_month:
-        next_month = datetime.now().month + 1 if datetime.now().month < 12 else 1
-        month_names = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
-                      'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
-        selected_month_name = st.selectbox("Miesiąc prognozy", month_names, index=next_month-1)
-        selected_month = month_names.index(selected_month_name) + 1
-    
-    with col_year:
-        next_year = datetime.now().year if datetime.now().month < 12 else datetime.now().year + 1
-        selected_year = st.selectbox("Rok prognozy", [next_year, next_year + 1], index=0)
-    
-    # Generuj prognozę
-    forecast = create_forecast(df_full, selected_month, selected_year)
-    
-    if not forecast.empty:
-        st.markdown("### 📝 Edycja prognozy")
-        st.markdown("Możesz zmodyfikować prognozowane wartości:")
+        # Wybór miesiąca do prognozy
+        col_month, col_year = st.columns(2)
+        with col_month:
+            next_month = datetime.now().month + 1 if datetime.now().month < 12 else 1
+            month_names = ['Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+                          'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień']
+            selected_month_name = st.selectbox("Miesiąc prognozy", month_names, index=next_month-1)
+            selected_month = month_names.index(selected_month_name) + 1
         
-        # Edytowalny data editor dla prognozy
-        forecast_edited = st.data_editor(
-            forecast,
-            column_config={
-                'category': st.column_config.TextColumn("Kategoria", disabled=True),
-                'subcategory': st.column_config.TextColumn("Podkategoria", disabled=True),
-                'predicted_amount': st.column_config.NumberColumn("Prognozowana kwota", format="%.2f")
-            },
-            hide_index=True,
-            use_container_width=True
-        )
+        with col_year:
+            next_year = datetime.now().year if datetime.now().month < 12 else datetime.now().year + 1
+            selected_year = st.selectbox("Rok prognozy", [next_year, next_year + 1], index=0)
         
-        # Oblicz prognozowane przychody i wydatki z edytowanej prognozy
-        forecast_income = forecast_edited[forecast_edited['category'] == 'Przychody']['predicted_amount'].sum()
-        forecast_expenses = forecast_edited[forecast_edited['category'] != 'Przychody']['predicted_amount'].sum()
-        forecast_balance = forecast_income + forecast_expenses  # expenses są ujemne
+        # Generuj prognozę
+        forecast = create_forecast(df_full, selected_month, selected_year)
         
-        col_sim_a, col_sim_b = st.columns(2)
-        
-        with col_sim_a:
-            st.markdown("### 📈 Prognoza finansowa")
-            st.markdown(f"**Przychody:** {forecast_income:,.2f} zł".replace(",", " "))
-            st.markdown(f"**Wydatki:** {abs(forecast_expenses):,.2f} zł".replace(",", " "))
-            st.markdown(f"**Saldo:** {forecast_balance:,.2f} zł".replace(",", " "))
+        if not forecast.empty:
+            st.markdown("### 📝 Edycja prognozy")
+            st.markdown("Możesz zmodyfikować prognozowane wartości:")
             
-            # Szczegółowa prognoza po kategoriach
-            st.markdown("### 📋 Szczegółowa prognoza")
-            for category in sorted(forecast_edited['category'].unique()):
-                cat_data = forecast_edited[forecast_edited['category'] == category]
-                cat_total = cat_data['predicted_amount'].sum()
-                
-                with st.expander(f"{category} – {abs(cat_total):,.2f} zł".replace(",", " ")):
-                    for _, row in cat_data.iterrows():
-                        color = "green" if row['predicted_amount'] >= 0 else "red"
-                        st.markdown(f"• **{row['subcategory']}** – <span style='color:{color}'>{abs(row['predicted_amount']):,.2f} zł</span>".replace(",", " "), unsafe_allow_html=True)
-        
-        with col_sim_b:
-            st.markdown("### 💰 Dystrybucja nadwyżki")
+            # Edytowalny data editor dla prognozy
+            forecast_edited = st.data_editor(
+                forecast,
+                column_config={
+                    'category': st.column_config.TextColumn("Kategoria", disabled=True),
+                    'subcategory': st.column_config.TextColumn("Podkategoria", disabled=True),
+                    'predicted_amount': st.column_config.NumberColumn("Prognozowana kwota", format="%.2f")
+                },
+                hide_index=True,
+                use_container_width=True
+            )
             
-            if forecast_balance > 0:
-                st.markdown(f"**Kwota do dystrybucji:** {forecast_balance:,.2f} zł".replace(",", " "))
+            # Oblicz prognozowane przychody i wydatki z edytowanej prognozy
+            forecast_income = forecast_edited[forecast_edited['category'] == 'Przychody']['predicted_amount'].sum()
+            forecast_expenses = forecast_edited[forecast_edited['category'] != 'Przychody']['predicted_amount'].sum()
+            forecast_balance = forecast_income + forecast_expenses  # expenses są ujemne
+            
+            col_sim_a, col_sim_b = st.columns(2)
+            
+            with col_sim_a:
+                st.markdown("### 📈 Prognoza finansowa")
+                st.markdown(f"**Przychody:** {forecast_income:,.2f} zł".replace(",", " "))
+                st.markdown(f"**Wydatki:** {abs(forecast_expenses):,.2f} zł".replace(",", " "))
+                st.markdown(f"**Saldo:** {forecast_balance:,.2f} zł".replace(",", " "))
                 
-                # Wybór podziału między oszczędności i nadpłaty
-                savings_percent = st.slider("% na oszczędności", 0, 100, 60)
-                debt_percent = 100 - savings_percent
-                
-                savings_amount = forecast_balance * savings_percent / 100
-                debt_amount = forecast_balance * debt_percent / 100
-                
-                st.markdown(f"**Oszczędności:** {savings_amount:,.2f} zł ({savings_percent}%)".replace(",", " "))
-                st.markdown(f"**Nadpłaty długów:** {debt_amount:,.2f} zł ({debt_percent}%)".replace(",", " "))
-                
-                # Wybór modelu dystrybucji oszczędności
-                model_choice = st.selectbox(
-                    "Wybierz model dystrybucji oszczędności",
-                    list(SAVINGS_MODELS.keys()) + ["Własny"]
-                )
-                
-                if model_choice != "Własny":
-                    # Użyj predefiniowanego modelu
-                    model = SAVINGS_MODELS[model_choice]
-                    st.markdown(f"*{model['description']}*")
+                # Szczegółowa prognoza po kategoriach
+                st.markdown("### 📋 Szczegółowa prognoza")
+                for category in sorted(forecast_edited['category'].unique()):
+                    cat_data = forecast_edited[forecast_edited['category'] == category]
+                    cat_total = cat_data['predicted_amount'].sum()
                     
-                    st.markdown("**Dystrybucja oszczędności:**")
-                    for subcategory, percentage in model['distribution'].items():
-                        amount = savings_amount * percentage / 100
-                        st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
-                    
-                    st.markdown("**Dystrybucja nadpłat długów:**")
-                    debt_categories = CATEGORIES['Nadpłata Długów']
-                    for debt in debt_categories:
-                        debt_share = debt_amount / len(debt_categories)
-                        st.markdown(f"• **{debt}** – {debt_share:,.2f} zł".replace(",", " "))
+                    with st.expander(f"{category} – {abs(cat_total):,.2f} zł".replace(",", " ")):
+                        for _, row in cat_data.iterrows():
+                            color = "green" if row['predicted_amount'] >= 0 else "red"
+                            st.markdown(f"• **{row['subcategory']}** – <span style='color:{color}'>{abs(row['predicted_amount']):,.2f} zł</span>".replace(",", " "), unsafe_allow_html=True)
+            
+            with col_sim_b:
+                st.markdown("### 💰 Dystrybucja nadwyżki")
                 
+                if forecast_balance > 0:
+                    st.markdown(f"**Kwota do dystrybucji:** {forecast_balance:,.2f} zł".replace(",", " "))
+                    
+                    # Wybór podziału między oszczędności i nadpłaty
+                    savings_percent = st.slider("% na oszczędności", 0, 100, 60)
+                    debt_percent = 100 - savings_percent
+                    
+                    savings_amount = forecast_balance * savings_percent / 100
+                    debt_amount = forecast_balance * debt_percent / 100
+                    
+                    st.markdown(f"**Oszczędności:** {savings_amount:,.2f} zł ({savings_percent}%)".replace(",", " "))
+                    st.markdown(f"**Nadpłaty długów:** {debt_amount:,.2f} zł ({debt_percent}%)".replace(",", " "))
+                    
+                    # Wybór modelu dystrybucji oszczędności
+                    model_choice = st.selectbox(
+                        "Wybierz model dystrybucji oszczędności",
+                        list(SAVINGS_MODELS.keys()) + ["Własny"]
+                    )
+                    
+                    if model_choice != "Własny":
+                        # Użyj predefiniowanego modelu
+                        model = SAVINGS_MODELS[model_choice]
+                        st.markdown(f"*{model['description']}*")
+                        
+                        st.markdown("**Dystrybucja oszczędności:**")
+                        for subcategory, percentage in model['distribution'].items():
+                            amount = savings_amount * percentage / 100
+                            st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
+                        
+                        st.markdown("**Dystrybucja nadpłat długów:**")
+                        debt_categories = CATEGORIES['Nadpłata Długów']
+                        for debt in debt_categories:
+                            debt_share = debt_amount / len(debt_categories)
+                            st.markdown(f"• **{debt}** – {debt_share:,.2f} zł".replace(",", " "))
+                    
+                    else:
+                        # Własny model - sliders
+                        st.markdown("**Ustaw własne proporcje oszczędności:**")
+                        
+                        savings_subs = CATEGORIES['Oszczędności']
+                        debt_subs = CATEGORIES['Nadpłata Długów']
+                        
+                        # Sliders dla oszczędności
+                        savings_percentages = {}
+                        debt_percentages = {}
+                        
+                        remaining_savings = 100
+                        for i, sub in enumerate(savings_subs):
+                            if i == len(savings_subs) - 1:
+                                # Ostatnia kategoria dostaje resztę
+                                savings_percentages[sub] = max(0, remaining_savings)
+                            else:
+                                max_val = remaining_savings
+                                default_val = min(20, max_val)
+                                if max_val > 0:
+                                    pct = st.slider(f"{sub} (%)", 0, max_val, default_val, key=f"sav_{sub}")
+                                    savings_percentages[sub] = pct
+                                    remaining_savings -= pct
+                                else:
+                                    savings_percentages[sub] = 0
+                        
+                        st.markdown("**Ustaw własne proporcje nadpłat:**")
+                        remaining_debt = 100
+                        for i, sub in enumerate(debt_subs):
+                            if i == len(debt_subs) - 1:
+                                debt_percentages[sub] = max(0, remaining_debt)
+                            else:
+                                max_val = remaining_debt
+                                default_val = min(25, max_val)
+                                if max_val > 0:
+                                    pct = st.slider(f"{sub} (%)", 0, max_val, default_val, key=f"debt_{sub}")
+                                    debt_percentages[sub] = pct
+                                    remaining_debt -= pct
+                                else:
+                                    debt_percentages[sub] = 0
+                        
+                        # Wyświetl dystrybucję
+                        st.markdown("**Dystrybucja oszczędności:**")
+                        for subcategory, percentage in savings_percentages.items():
+                            amount = savings_amount * percentage / 100
+                            st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
+                        
+                        st.markdown("**Dystrybucja nadpłat długów:**")
+                        for subcategory, percentage in debt_percentages.items():
+                            amount = debt_amount * percentage / 100
+                            st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
+                    
                 else:
-                    # Własny model - sliders
-                    st.markdown("**Ustaw własne proporcje oszczędności:**")
-                    
-                    savings_subs = CATEGORIES['Oszczędności']
-                    debt_subs = CATEGORIES['Nadpłata Długów']
-                    
-                    # Sliders dla oszczędności
-                    savings_percentages = {}
-                    debt_percentages = {}
-                    
-                    remaining_savings = 100
-                    for i, sub in enumerate(savings_subs):
-                        if i == len(savings_subs) - 1:
-                            # Ostatnia kategoria dostaje resztę
-                            savings_percentages[sub] = max(0, remaining_savings)
-                        else:
-                            max_val = remaining_savings
-                            default_val = min(20, max_val)
-                            if max_val > 0:
-                                pct = st.slider(f"{sub} (%)", 0, max_val, default_val, key=f"sav_{sub}")
-                                savings_percentages[sub] = pct
-                                remaining_savings -= pct
-                            else:
-                                savings_percentages[sub] = 0
-                    
-                    st.markdown("**Ustaw własne proporcje nadpłat:**")
-                    remaining_debt = 100
-                    for i, sub in enumerate(debt_subs):
-                        if i == len(debt_subs) - 1:
-                            debt_percentages[sub] = max(0, remaining_debt)
-                        else:
-                            max_val = remaining_debt
-                            default_val = min(25, max_val)
-                            if max_val > 0:
-                                pct = st.slider(f"{sub} (%)", 0, max_val, default_val, key=f"debt_{sub}")
-                                debt_percentages[sub] = pct
-                                remaining_debt -= pct
-                            else:
-                                debt_percentages[sub] = 0
-                    
-                    # Wyświetl dystrybucję
-                    st.markdown("**Dystrybucja oszczędności:**")
-                    for subcategory, percentage in savings_percentages.items():
-                        amount = savings_amount * percentage / 100
-                        st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
-                    
-                    st.markdown("**Dystrybucja nadpłat długów:**")
-                    for subcategory, percentage in debt_percentages.items():
-                        amount = debt_amount * percentage / 100
-                        st.markdown(f"• **{subcategory}** ({percentage}%) – {amount:,.2f} zł".replace(",", " "))
-                
-            else:
-                st.warning("Prognoza wskazuje na deficyt lub zerowe saldo - brak środków na oszczędności.")
-    
-    else:
-        st.info("Brak wystarczających danych historycznych do utworzenia prognozy.")
-    # --- DRILL‑DOWN wykresy kołowe ---
-    st.markdown("## 📈 Wykresy kołowe")
-    
-    # Utworzenie dwóch kolumn dla layoutu
-    col_buttons, col_chart = st.columns([1, 3])
-    
-    # Przyciski kategorii w lewej kolumnie
-    with col_buttons:
-        if 'selected_cat' not in st.session_state:
-            st.session_state['selected_cat'] = None
-        st.markdown("**Kliknij kategorię:**")
-        for cat_name in total['category']:
-            if st.button(cat_name, key=f"btn_{cat_name}"):
-                st.session_state['selected_cat'] = cat_name
-        if st.button("Resetuj wybór"):
-            st.session_state['selected_cat'] = None
-
-    # Wykresy w prawej kolumnie
-    with col_chart:
-        sel = st.session_state['selected_cat']
-
-        # wykres kategorii
-        tot = total.copy()
-        colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
-        fig_cat = go.Figure(data=[go.Pie(
-            labels=tot['category'], values=tot['sum'].abs(),
-            marker=dict(colors=colors, line=dict(color='#111', width=3)),
-            hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
-            textposition='outside',
-            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
-            textfont=dict(size=14, color='white'),
-            pull=[0.02]*len(tot), hoverinfo='none'
-        )])
-        fig_cat.update_layout(height=450, showlegend=False,
-                              paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
-                              margin=dict(l=80,r=80,t=40,b=80))
-        st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
-
-        # wykres podkategorii
-        if sel:
-            sub = grouped[grouped['category']==sel].copy()
-            title = f"Podkategorie: {sel}"
+                    st.warning("Prognoza wskazuje na deficyt lub zerowe saldo - brak środków na oszczędności.")
+        
         else:
-            sub = grouped.copy()
-            title = "Podkategorie: wszystkie"
-        fig_sub = go.Figure(data=[go.Pie(
-            labels=sub['subcategory'], values=sub['sum'].abs(),
-            marker=dict(line=dict(color='#111', width=2)),
-            hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
-            textposition='outside',
-            texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
-            textfont=dict(size=14, color='white'),
-            pull=[0.02]*len(sub), hoverinfo='none'
-        )])
-        fig_sub.update_layout(title=title, height=450,
-                              showlegend=False,
-                              paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
-                              margin=dict(l=80,r=80,t=40,b=80))
-        st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False})
+            st.info("Brak wystarczających danych historycznych do utworzenia prognozy.")
+    # --- DRILL‑DOWN wykresy kołowe ---
+    with st.expander("📈 Wykresy kołowe", expanded=False):
+    
+        # Utworzenie dwóch kolumn dla layoutu
+        col_buttons, col_chart = st.columns([1, 3])
+        
+        # Przyciski kategorii w lewej kolumnie
+        with col_buttons:
+            if 'selected_cat' not in st.session_state:
+                st.session_state['selected_cat'] = None
+            st.markdown("**Kliknij kategorię:**")
+            for cat_name in total['category']:
+                if st.button(cat_name, key=f"btn_{cat_name}"):
+                    st.session_state['selected_cat'] = cat_name
+            if st.button("Resetuj wybór"):
+                st.session_state['selected_cat'] = None
+    
+        # Wykresy w prawej kolumnie
+        with col_chart:
+            sel = st.session_state['selected_cat']
+    
+            # wykres kategorii
+            tot = total.copy()
+            colors = ["#2ca02c" if c=="Przychody" else "#d62728" for c in tot['category']]
+            fig_cat = go.Figure(data=[go.Pie(
+                labels=tot['category'], values=tot['sum'].abs(),
+                marker=dict(colors=colors, line=dict(color='#111', width=3)),
+                hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
+                textposition='outside',
+                texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+                textfont=dict(size=14, color='white'),
+                pull=[0.02]*len(tot), hoverinfo='none'
+            )])
+            fig_cat.update_layout(height=450, showlegend=False,
+                                  paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+                                  margin=dict(l=80,r=80,t=40,b=80))
+            st.plotly_chart(fig_cat, use_container_width=True, config={"displayModeBar":False})
+    
+            # wykres podkategorii
+            if sel:
+                sub = grouped[grouped['category']==sel].copy()
+                title = f"Podkategorie: {sel}"
+            else:
+                sub = grouped.copy()
+                title = "Podkategorie: wszystkie"
+            fig_sub = go.Figure(data=[go.Pie(
+                labels=sub['subcategory'], values=sub['sum'].abs(),
+                marker=dict(line=dict(color='#111', width=2)),
+                hole=0.3, domain=dict(x=[0.2,0.8], y=[0.2,0.8]),
+                textposition='outside',
+                texttemplate='<b>%{label}</b><br>%{percent:.0%}<br>%{value:,.2f} zł',
+                textfont=dict(size=14, color='white'),
+                pull=[0.02]*len(sub), hoverinfo='none'
+            )])
+            fig_sub.update_layout(title=title, height=450,
+                                  showlegend=False,
+                                  paper_bgcolor='#111', plot_bgcolor='#111', font_color='white',
+                                  margin=dict(l=80,r=80,t=40,b=80))
+            st.plotly_chart(fig_sub, use_container_width=True, config={"displayModeBar":False})
 if __name__ == "__main__":
     main()
