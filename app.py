@@ -165,7 +165,7 @@ class Categorizer:
         """Zapisuje wszystkie przypisania jednym ruchem bez pokazywania komunikatów"""
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
         df = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
-                          for k,(c,s) in self.map.items()])
+            for k,(c,s) in self.map.items()])
         df.to_csv(ASSIGNMENTS_FILE, index=False)
         return upload_assignments_to_github(df)
     
