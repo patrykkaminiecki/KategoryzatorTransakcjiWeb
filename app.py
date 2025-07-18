@@ -537,17 +537,17 @@ def main():
         use_container_width=True
     )
     if st.button("💾 Zapisz zmiany"):
-    keys = df['key'].tolist()
-    for i,row in enumerate(edited.itertuples(index=False)):
-        cat.assign(keys[i], row.category, row.subcategory)
-    
-    # Dodatkowe wysłanie na GitHub po zapisaniu wszystkich zmian
-    df_to_upload = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
-                                for k,(c,s) in cat.map.items()])
-    if upload_assignments_to_github(df_to_upload):
-        st.success("✅ Zapisano wszystkie zmiany lokalnie i na GitHub")
-    else:
-        st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
+        keys = df['key'].tolist()
+        for i,row in enumerate(edited.itertuples(index=False)):
+            cat.assign(keys[i], row.category, row.subcategory)
+        
+        # Dodatkowe wysłanie na GitHub po zapisaniu wszystkich zmian
+        df_to_upload = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
+                                    for k,(c,s) in cat.map.items()])
+        if upload_assignments_to_github(df_to_upload):
+            st.success("✅ Zapisano wszystkie zmiany lokalnie i na GitHub")
+        else:
+            st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
 
     # --- Raport i YTD obok siebie ---
     colA, colB = st.columns(2, gap="medium")
