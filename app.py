@@ -12,6 +12,7 @@ import calendar
 import requests
 import base64
 import json
+import os
 # ------------------------
 # 1) DEFINICJA KATEGORII
 # ------------------------
@@ -387,7 +388,10 @@ def main():
         df_raw = load_bank_csv(up)
     except Exception as e:
         st.error(str(e)); return
-
+    if ASSIGNMENTS_FILE.exists():
+        if st.button("🗑️ Usuń przypisania kategorii"):
+            ASSIGNMENTS_FILE.unlink()
+            st.success("Plik assignments.csv został usunięty.")
     # --- Przygotuj df_full (historyczne, do YTD i raportu) ---
     df_full = df_raw.copy()
     df_full.columns = [c.strip() for c in df_full.columns]
