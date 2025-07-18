@@ -161,6 +161,7 @@ def clean_desc(s):
     return re.sub(r'\s+', ' ', str(s).replace("'", "").replace('"', "")).strip()
 
 class Categorizer:
+    
     def save_all_assignments(self):
         """Zapisuje wszystkie przypisania jednym ruchem bez pokazywania komunikatów"""
         ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
