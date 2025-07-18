@@ -13,6 +13,7 @@ import requests
 import base64
 import json
 import os
+
 # ------------------------
 # 1) DEFINICJA KATEGORII
 # ------------------------
@@ -203,6 +204,14 @@ class Categorizer:
             st.success("✅ Zapisano assignments.csv lokalnie i na GitHub")
         else:
             st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
+
+    def save_all_assignments(self):
+        """Zapisuje wszystkie przypisania jednym ruchem bez pokazywania komunikatów"""
+        ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
+        df = pd.DataFrame([{"description":k,"category":c,"subcategory":s}
+                          for k,(c,s) in self.map.items()])
+        df.to_csv(ASSIGNMENTS_FILE, index=False)
+        return upload_assignments_to_github(df)
 
 # ------------------------
 # 4) WCZYTANIE CSV
@@ -528,6 +537,10 @@ def main():
     df['subcategory'] = df['key'].map(lambda k: cat.map.get(k,("",""))[1])
     final = df[['Date','Description','Tytuł','Effective_Amount','category','subcategory']].copy()
     final = final.rename(columns={'Effective_Amount': 'Kwota'})
+    
+    # Dodaj kolumny z oryginalnymi wartościami kategorii dla porównania
+    original_categories = final[['category', 'subcategory']].copy()
+    
     st.markdown("## 🗃️ Tabela Transakcji")
     edited = st.data_editor(
         final,
@@ -540,29 +553,31 @@ def main():
         hide_index=True,
         use_container_width=True
     )
+    
     if st.button("💾 Zapisz zmiany"):
-        # 1) Przygotuj listę nowych rekordów
+        # Znajdź tylko rzeczywiście zmienione rekordy
         keys = df['key'].tolist()
-        new_records = []
-        for i, row in enumerate(edited.itertuples(index=False)):
-            desc = keys[i]
-            cat.map[desc] = (row.category, row.subcategory)  # aktualizuj w pamięci
-            new_records.append({
-                "description": desc,
-                "category": row.category,
-                "subcategory": row.subcategory
-            })
-
-        # 2) Zapisz lokalnie cały plik jednym ruchem
-        df_new = pd.DataFrame(new_records)
-        ASSIGNMENTS_FILE.parent.mkdir(exist_ok=True)
-        df_new.to_csv(ASSIGNMENTS_FILE, index=False)
-
-        # 3) Wyślij na GitHub tylko raz
-        if upload_assignments_to_github(df_new):
-            st.success("✅ Zapisano wszystkie zmiany lokalnie i na GitHub")
+        changes_made = False
+        changed_count = 0
+        
+        for i, (original_row, edited_row) in enumerate(zip(original_categories.itertuples(index=False), edited.itertuples(index=False))):
+            # Sprawdź czy kategoria lub podkategoria się zmieniła
+            if original_row.category != edited_row.category or original_row.subcategory != edited_row.subcategory:
+                desc = keys[i]
+                # Aktualizuj tylko zmienione rekordy
+                cat.map[desc] = (edited_row.category, edited_row.subcategory)
+                changes_made = True
+                changed_count += 1
+        
+        if changes_made:
+            # Zapisz wszystkie przypisania jednym ruchem
+            success = cat.save_all_assignments()
+            if success:
+                st.success(f"✅ Zapisano {changed_count} zmian lokalnie i na GitHub")
+            else:
+                st.warning(f"⚠️ Zapisano {changed_count} zmian lokalnie, ale nie udało się wysłać na GitHub")
         else:
-            st.warning("⚠️ Zapisano lokalnie, ale nie udało się wysłać na GitHub")
+            st.info("ℹ️ Nie wykryto żadnych zmian do zapisania")
 
     # --- Raport i YTD obok siebie ---
     colA, colB = st.columns(2, gap="medium")
